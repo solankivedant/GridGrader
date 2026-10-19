@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "GridGrader – view many submissions at once",
+  "short_name": "GridGrader",
+  "version": "1.0.0",
+  "description": "Finds every submitted file on a page (Moodle, Classroom, LMS, any site) and shows them side by side in a resizable grid — PDF, Word, Excel, images, video, audio, code, ZIP, STL/OBJ and Logisim circuits.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Open this page's files in a grid",
+    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png" }
+  },
+  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "commands": {
+    "_execute_action": { "suggested_key": { "default": "Alt+G" }, "description": "Scan this page for files" }
+  }
+}
