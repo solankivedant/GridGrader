@@ -1,4 +1,5 @@
 import { renderInto, sniffKind, looksLikeHtmlPage, fmtSize } from './renderers.js';
+import { circuitFeatures, circuitSimilarity } from './circsim.js';
 
 const $ = (s) => document.querySelector(s);
 const hasChrome = typeof chrome !== 'undefined' && chrome.storage;
@@ -24,7 +25,7 @@ const MAX_PARALLEL = 3;
 let running = 0;
 const queue = [];
 
-const prefs = Object.assign({ cols: 3, height: 440, view: 'side', sideW: 640 }, JSON.parse(localStorage.getItem('gg_prefs') || '{}'));
+const prefs = Object.assign({ cols: 3, height: 440, view: 'side', sideW: 640, sort: 'order' }, JSON.parse(localStorage.getItem('gg_prefs') || '{}'));
 applyPrefs();
 
 // Use the chosen column count, but never squeeze tiles below ~280px (e.g. when the side view is open).
@@ -59,7 +60,11 @@ const safe = (s) => (s || '').replace(/[\\/:*?"<>|\n\r\t]+/g, ' ').replace(/\s+/
   $('#title').textContent = t || 'New grid';
   if (job.page && job.page.url) { $('#source').href = job.page.url; $('#source').innerHTML = ggIcon('link', 12); $('#source').append(job.page.url.replace(/^https?:\/\//, '')); $('#source').dataset.tip = 'Source page'; }
   else $('#source').textContent = 'Drop files anywhere to add them';
-  for (const f of job.files || []) addItem({ url: f.url, name: f.name, ext: f.ext, kind: f.kind || ggKindOf(f.ext), context: f.context, noteKey: f.noteKey });
+  for (const f of job.files || []) addItem({ url: f.url, name: f.name, ext: f.ext, kind: f.kind || ggKindOf(f.ext), context: f.context, noteKey: f.noteKey,
+    late: !!f.late, lateText: f.lateText, modified: f.modified, modifiedText: f.modifiedText });
+  $('#sortBy').value = prefs.sort;
+  applySort();
+  updateFilterDot();
   refreshEmpty();
   updateStatus();
   // A tab opened with "New tab" shows its one file straight away, full screen.
@@ -90,7 +95,7 @@ async function openInNewTab(it) {
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   await store.set('job_' + id, {
     created: Date.now(), tabId: job.tabId, page: job.page, single: true,
-    files: [{ url, name: it.name, ext: it.ext, kind: it.kind, context: it.context, noteKey: noteKey(it) }],
+    files: [{ url, name: it.name, ext: it.ext, kind: it.kind, context: it.context, noteKey: noteKey(it), late: it.late, lateText: it.lateText, modified: it.modified, modifiedText: it.modifiedText }],
   });
   const page = 'viewer.html?job=' + id;
   if (hasChrome && chrome.tabs && chrome.tabs.create) {
@@ -107,14 +112,21 @@ function addItem(data, afterItem) {
   it.kind = it.kind || ggKindOf(it.ext);
   it.tile = buildTile(it);
   if (afterItem) {
-    items.splice(items.indexOf(afterItem) + 1, 0, it);
-    afterItem.tile.after(it.tile);
+    // files opened from a ZIP sit right after their ZIP, whatever the sort order
+    const kids = items.filter(i => i.parent === afterItem).length;
+    it.parent = afterItem;
+    it.order = afterItem.order + (kids + 1) / 1000;
+    const anchor = [afterItem, ...items.filter(i => i.parent === afterItem)].pop();
+    items.splice(items.indexOf(anchor) + 1, 0, it);
+    anchor.tile.after(it.tile);
   } else {
+    it.order = it.id;
     items.push(it);
     $('#grid').appendChild(it.tile);
   }
   tileObserver.observe(it.tile);
   updateKindFilter();
+  updateLate();
   renumber();
   refreshEmpty();
   return it;
@@ -125,9 +137,11 @@ function buildTile(it) {
   t.className = 'tile';
   t.innerHTML = `
     <div class="thead">
-      <span class="num"></span>
+      <button class="pick" data-tip="Select" data-key="X" aria-label="Select this file"><span class="box">${ggIcon('check', 12)}</span><span class="num"></span></button>
       <span class="ficon"></span>
       <div class="tnames"></div>
+      <button class="simb" hidden></button>
+      <span class="lateb" hidden>Late</span>
       <span class="kind"></span>
       <div class="tact">
         <button data-a="side" data-tip="Side view" aria-label="Open in side view">${ggIcon('side', 16)}</button>
@@ -142,13 +156,25 @@ function buildTile(it) {
   const names = t.querySelector('.tnames');
   if (it.context) names.appendChild(Object.assign(document.createElement('div'), { className: 'tctx', textContent: it.context }));
   names.appendChild(Object.assign(document.createElement('div'), { className: 'tname', textContent: it.name }));
-  names.title = `${it.context ? it.context + ' — ' : ''}${it.name}\nClick for large view`;
+  names.title = `${it.context ? it.context + ' — ' : ''}${it.name}\nClick for large view · Ctrl+click to select`;
+  if (it.late) {
+    const lb = t.querySelector('.lateb');
+    lb.hidden = false;
+    lb.dataset.tip = it.lateText || 'Late';
+  }
+  if (it.modifiedText) t.querySelector('.tnames').title += `\nSubmitted ${it.modifiedText}`;
+  t.querySelector('.pick').onclick = (e) => { e.stopPropagation(); togglePick(it, e.shiftKey); };
+  t.addEventListener('pointerdown', () => setCursor(it, false));
   t.querySelector('.kind').textContent = it.ext || ggKindLabel(it.kind);
   t.querySelector('.kind').dataset.kind = it.kind;
   t.querySelector('.ficon').dataset.kind = it.kind;
   t.querySelector('.ficon').innerHTML = ggKindIcon(it.kind, 16);
   t.querySelector('[data-a=orig]').onclick = () => openInNewTab(it);
-  names.onclick = () => openModal(it);
+  names.onclick = (e) => {
+    if (e.ctrlKey || e.metaKey) togglePick(it, false);
+    else if (e.shiftKey) togglePick(it, true);
+    else openModal(it);
+  };
   t.querySelector('[data-a=side]').onclick = () => openModal(it, 'side');
   t.querySelector('[data-a=full]').onclick = () => openModal(it, 'full');
   t.querySelector('[data-a=dl]').onclick = () => downloadItem(it);
@@ -183,8 +209,70 @@ function removeItem(it) {
   tileObserver.unobserve(it.tile);
   it.tile.remove();
   items.splice(items.indexOf(it), 1);
-  renumber(); updateStatus(); updateKindFilter(); refreshEmpty();
+  picked.delete(it);
+  if (cursor === it) cursor = null;
+  renumber(); updateStatus(); updateKindFilter(); refreshEmpty(); updatePicks(); updateLate();
 }
+
+// ---------- keyboard cursor (J/K) ----------
+let cursor = null;
+function setCursor(it, scroll = true) {
+  if (cursor === it) return;
+  if (cursor) cursor.tile.classList.remove('cursor');
+  cursor = it;
+  if (it) {
+    it.tile.classList.add('cursor');
+    if (scroll) it.tile.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
+function moveCursor(d) {
+  const vis = visibleItems();
+  if (!vis.length) return;
+  if (!$('#modal').hidden) return step(d);
+  const i = vis.indexOf(cursor);
+  setCursor(vis[i < 0 ? 0 : Math.max(0, Math.min(vis.length - 1, i + d))]);
+}
+const current = () => modalItem || cursor;
+
+// ---------- multi-select ----------
+const picked = new Set();
+let lastPick = null;
+function togglePick(it, range) {
+  const vis = visibleItems();
+  if (range && lastPick && vis.includes(lastPick) && vis.includes(it)) {
+    const [a, b] = [vis.indexOf(lastPick), vis.indexOf(it)].sort((x, y) => x - y);
+    const on = !picked.has(it) || picked.has(lastPick);
+    for (const i of vis.slice(a, b + 1)) on ? picked.add(i) : picked.delete(i);
+  } else picked.has(it) ? picked.delete(it) : picked.add(it);
+  lastPick = it;
+  setCursor(it, false);
+  updatePicks();
+}
+function clearPicks() { picked.clear(); updatePicks(); }
+function updatePicks() {
+  for (const it of items) it.tile.classList.toggle('picked', picked.has(it));
+  const n = picked.size;
+  $('#selbar').hidden = n === 0;
+  document.body.classList.toggle('has-selbar', n > 0);
+  $('#selCount').textContent = n;
+  const cmp = $('#selCompare');
+  cmp.disabled = n !== 2;
+  cmp.dataset.tip = n === 2 ? 'Compare side by side' : 'Pick exactly 2';
+  $('#selTabs').disabled = n > 12;
+  $('#selTabs').dataset.tip = n > 12 ? 'Up to 12 at once' : 'One tab each';
+  $('#selDl').innerHTML = ggIcon(n > 1 ? 'zip' : 'download', 16) + (n > 1 ? 'Download ZIP' : 'Download');
+}
+const pickedList = () => items.filter(i => picked.has(i)); // in grid order
+$('#selClear').onclick = clearPicks;
+$('#selAll').onclick = () => { visibleItems().forEach(i => picked.add(i)); updatePicks(); };
+$('#selCompare').onclick = () => { const p = pickedList(); if (p.length === 2) openCompare(p[0], p[1]); };
+$('#selTabs').onclick = async () => { for (const it of pickedList().slice(0, 12)) await openInNewTab(it); };
+$('#selDl').onclick = () => { const p = pickedList(); p.length === 1 ? downloadItem(p[0]) : zipItems(p, `${safe(job.page && job.page.title) || 'submissions'} - selected.zip`); };
+$('#selRm').onclick = () => {
+  const p = pickedList();
+  if (p.length > 3 && !confirm(`Remove ${p.length} files from this grid? (Nothing is deleted on the website.)`)) return;
+  p.forEach(removeItem);
+};
 
 function refreshEmpty() { $('#emptyState').hidden = items.length > 0; }
 
@@ -335,13 +423,11 @@ async function downloadItem(it) {
   catch (e) { if (it.url) window.open(it.url, '_blank'); }
 }
 
-$('#dlAll').onclick = async () => {
-  closeMenu();
+async function zipItems(list, fileName) {
   const zip = new JSZip();
-  const vis = items.filter(i => i.tile.style.display !== 'none');
   let n = 0, failed = 0;
-  for (const [i, it] of vis.entries()) {
-    setStatus(`Preparing ZIP… ${i + 1}/${vis.length}`);
+  for (const [i, it] of list.entries()) {
+    setStatus(`Preparing ZIP… ${i + 1}/${list.length}`);
     try {
       await getBlob(it);
       const base = it.name.split(' › ').pop();
@@ -350,10 +436,11 @@ $('#dlAll').onclick = async () => {
     } catch { failed++; }
   }
   const out = await zip.generateAsync({ type: 'blob' });
-  saveBlob(out, `${safe(job.page && job.page.title) || 'submissions'}.zip`);
+  saveBlob(out, fileName);
   setStatus(`ZIP ready: ${n} files${failed ? `, ${failed} couldn't be downloaded` : ''}.`);
   setTimeout(updateStatus, 5000);
-};
+}
+$('#dlAll').onclick = () => { closeMenu(); zipItems(visibleItems(), `${safe(job.page && job.page.title) || 'submissions'}.zip`); };
 
 $('#exportNotes').onclick = () => {
   closeMenu();
@@ -380,8 +467,51 @@ function updateStatus() {
   const done = items.filter(i => i.state === 'done').length;
   const err = items.filter(i => i.state === 'error').length;
   const vis = items.filter(i => i.tile.style.display !== 'none').length;
-  setStatus(`${total} file${total === 1 ? '' : 's'}${vis !== total ? ` (${vis} shown)` : ''} · ${done} loaded${err ? ` · ${err} failed` : ''}`);
+  const late = items.filter(i => i.late).length;
+  setStatus(`${total} file${total === 1 ? '' : 's'}${vis !== total ? ` (${vis} shown)` : ''} · ${done} loaded${err ? ` · ${err} failed` : ''}${late ? ` · ${late} late` : ''}`);
 }
+
+// ---------- late submissions ----------
+let lateOnly = false;
+function updateLate() {
+  const n = items.filter(i => i.late).length;
+  $('#lateOnly').hidden = n === 0;
+  $('#lateCount').textContent = n || '';
+  if (!n && lateOnly) { lateOnly = false; applyFilter(); }
+}
+$('#lateOnly').onclick = () => {
+  lateOnly = !lateOnly;
+  $('#lateOnly').classList.toggle('on', lateOnly);
+  $('#lateOnly').setAttribute('aria-pressed', lateOnly);
+  $('#lateOnly').dataset.tip = lateOnly ? 'Show all' : 'Late only';
+  applyFilter();
+};
+
+// ---------- sorting ----------
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+const student = (it) => it.context || it.name;
+const SORTS = {
+  order: () => 0,
+  name: (a, b) => collator.compare(student(a), student(b)),
+  nameDesc: (a, b) => collator.compare(student(b), student(a)),
+  file: (a, b) => collator.compare(a.name, b.name),
+  type: (a, b) => collator.compare(ggKindLabel(a.kind), ggKindLabel(b.kind)) || collator.compare(a.ext, b.ext),
+  newest: (a, b) => (b.modified || 0) - (a.modified || 0),
+  oldest: (a, b) => (a.modified || Infinity) - (b.modified || Infinity),
+  late: (a, b) => (b.late ? 1 : 0) - (a.late ? 1 : 0),
+  similar: (a, b) => ((b.sim && b.sim.score) || 0) - ((a.sim && a.sim.score) || 0),
+};
+function applySort() {
+  const cmp = SORTS[prefs.sort] || SORTS.order;
+  const top = items.filter(i => !i.parent).sort((a, b) => cmp(a, b) || a.order - b.order);
+  const sorted = [];
+  for (const it of top) sorted.push(it, ...items.filter(i => i.parent === it).sort((a, b) => a.order - b.order));
+  items.splice(0, items.length, ...sorted);
+  const grid = $('#grid');
+  for (const it of items) grid.appendChild(it.tile);
+  renumber();
+}
+$('#sortBy').onchange = (e) => { prefs.sort = e.target.value; applyPrefs(); applySort(); updateFilterDot(); };
 
 // ---------- toolbar ----------
 $('#cols').oninput = (e) => { prefs.cols = +e.target.value; applyPrefs(); };
@@ -392,10 +522,10 @@ function applyFilter() {
   const q = $('#search').value.trim().toLowerCase();
   const k = $('#kindFilter').value;
   for (const it of items) {
-    const ok = (!k || it.kind === k) && (!q || it.name.toLowerCase().includes(q) || (it.context || '').toLowerCase().includes(q) || (notes[noteKey(it)] || '').toLowerCase().includes(q));
+    const ok = (!k || it.kind === k) && (!lateOnly || it.late) && (!q || it.name.toLowerCase().includes(q) || (it.context || '').toLowerCase().includes(q) || (notes[noteKey(it)] || '').toLowerCase().includes(q));
     it.tile.style.display = ok ? '' : 'none';
   }
-  renumber(); updateStatus();
+  renumber(); updateStatus(); updateFilterDot();
 }
 function updateKindFilter() {
   const sel = $('#kindFilter');
@@ -404,6 +534,27 @@ function updateKindFilter() {
   sel.innerHTML = '<option value="">All types</option>' + kinds.map(k => `<option value="${k}">${ggKindLabel(k)}</option>`).join('');
   sel.value = kinds.includes(cur) ? cur : '';
 }
+// ---------- collapsible filters (narrow grid, e.g. next to the side view) ----------
+const bar = document.querySelector('.bar');
+new ResizeObserver(() => {
+  const compact = bar.clientWidth < 1180;
+  if (compact !== bar.classList.contains('compact')) {
+    bar.classList.toggle('compact', compact);
+    if (!compact) setFiltersOpen(false);
+  }
+}).observe(bar);
+function setFiltersOpen(open) {
+  bar.classList.toggle('open', open);
+  $('#filterToggle').setAttribute('aria-expanded', open);
+  $('#filterToggle').classList.toggle('on', open);
+  $('#filterToggle').dataset.tip = open ? 'Hide filters' : 'Filters';
+}
+$('#filterToggle').onclick = () => setFiltersOpen(!bar.classList.contains('open'));
+function updateFilterDot() {
+  const active = !!$('#search').value.trim() || !!$('#kindFilter').value || lateOnly || prefs.sort !== 'order';
+  $('#filterDot').hidden = !active;
+}
+
 const closeMenu = () => { $('#morePop').hidden = true; };
 $('#moreBtn').onclick = (e) => { e.stopPropagation(); $('#morePop').hidden = !$('#morePop').hidden; };
 document.addEventListener('click', (e) => { if (!e.target.closest('.menu')) closeMenu(); });
@@ -417,6 +568,7 @@ function addLocal(fileList) {
     const it = addItem({ file: f, name: f.name, ext, context: '', size: f.size });
     it.url = '';
   }
+  applySort();
   updateStatus();
 }
 let dragDepth = 0;
@@ -448,6 +600,7 @@ async function openModal(it, mode, remember = true) {
   body.innerHTML = '<div class="center"><div class="spinner"></div></div>';
   body.scrollTop = 0;
   items.forEach(i => i.tile.classList.toggle('focus', i === it));
+  setCursor(it, false);
   try {
     await getBlob(it);
     if (modalItem !== it) return;
@@ -520,10 +673,176 @@ $('#next').onclick = () => step(1);
 $('#mDl').onclick = () => modalItem && downloadItem(modalItem);
 $('#mOpen').onclick = () => modalItem && openInNewTab(modalItem);
 $('#mNote').oninput = (e) => modalItem && saveNote(modalItem, e.target.value);
+
+// ---------- keyboard shortcuts ----------
+function focusNote() {
+  const it = current();
+  if (!$('#modal').hidden) return $('#mNote').focus();
+  if (it) { it.tile.scrollIntoView({ block: 'nearest' }); it.tile.querySelector('.note').focus(); }
+}
+const showKeys = (on = $('#keysDlg').hidden) => { $('#keysDlg').hidden = !on; };
+$('#showKeys').onclick = () => { closeMenu(); showKeys(true); };
+$('#keysClose').onclick = () => showKeys(false);
+for (const d of document.querySelectorAll('.dialog-back')) d.addEventListener('pointerdown', (e) => { if (e.target === d) d.hidden = true; });
+
 addEventListener('keydown', (e) => {
-  if ($('#modal').hidden) return;
-  if (e.target.matches('input, textarea')) { if (e.key === 'Escape') e.target.blur(); return; }
-  if (e.key === 'Escape') closeModal();
-  else if (e.key === 'ArrowRight') step(1);
-  else if (e.key === 'ArrowLeft') step(-1);
+  const t = e.target;
+  if (t.matches && t.matches('input, textarea, select, [contenteditable]')) {
+    if (e.key === 'Escape') t.blur();
+    else if (e.key === 'Enter' && t.classList.contains('note')) { t.blur(); } // Enter finishes a note
+    return;
+  }
+  const k = e.key, mod = e.ctrlKey || e.metaKey;
+  // dialogs and compare take Esc first
+  for (const id of ['#keysDlg', '#simDlg']) if (!$(id).hidden) { if (k === 'Escape' || (k === '?' && id === '#keysDlg')) { $(id).hidden = true; e.preventDefault(); } return; }
+  if (!$('#compare').hidden) { if (k === 'Escape') { closeCompare(); e.preventDefault(); } return; }
+  if (e.altKey) return;
+  if (mod) {
+    if (k.toLowerCase() === 'a') { e.preventDefault(); visibleItems().forEach(i => picked.add(i)); updatePicks(); }
+    return;
+  }
+  const modalOpen = !$('#modal').hidden;
+  const it = current();
+  switch (k) {
+    case 'ArrowRight': if (!modalOpen) return; step(1); break;
+    case 'ArrowLeft': if (!modalOpen) return; step(-1); break;
+    case 'j': case 'J': moveCursor(1); break;
+    case 'k': case 'K': moveCursor(-1); break;
+    case 'Enter': case 's': case 'S': if (!cursor) return; openModal(cursor, 'side'); break;
+    case 'f': case 'F': if (!it) return; openModal(it, 'full'); break;
+    case 'n': case 'N': focusNote(); break;
+    case 'x': case 'X': if (!it) return; togglePick(it, e.shiftKey); break;
+    case 'c': case 'C': if (picked.size !== 2) return; $('#selCompare').click(); break;
+    case 'o': case 'O': if (!it) return; openInNewTab(it); break;
+    case 'd': case 'D': if (!it) return; downloadItem(it); break;
+    case '/': $('#search').focus(); break;
+    case '?': showKeys(); break;
+    case 'Escape': if (modalOpen) closeModal(); else if (picked.size) clearPicks(); else return; break;
+    default: return;
+  }
+  e.preventDefault();
 });
+
+// ---------- compare two side by side ----------
+let cmpPair = null, cmpCleanups = [];
+function closeCompare() {
+  cmpCleanups.forEach(f => f && f()); cmpCleanups = [];
+  $('#compare').hidden = true; $('#cmpPanes').innerHTML = '';
+  document.body.style.overflow = $('#modal').hidden || prefs.view === 'side' ? '' : 'hidden';
+  cmpPair = null;
+}
+async function openCompare(a, b, score) {
+  if (!$('#modal').hidden) closeModal();
+  cmpCleanups.forEach(f => f && f()); cmpCleanups = [];
+  cmpPair = [a, b];
+  $('#compare').hidden = false;
+  document.body.style.overflow = 'hidden';
+  const sc = $('#cmpScore');
+  const s = score != null ? score : (a.sim && a.sim.all && a.sim.all.get(b)) ?? null;
+  sc.hidden = s == null;
+  if (s != null) { sc.textContent = `${Math.round(s * 100)}% similar`; sc.className = 'cmp-score ' + simLevel(s); }
+  const panes = $('#cmpPanes');
+  panes.innerHTML = '';
+  [a, b].forEach((it, i) => {
+    if (i) panes.appendChild(Object.assign(document.createElement('div'), { className: 'cmp-div' }));
+    const pane = document.createElement('section');
+    pane.className = 'cmp-pane';
+    pane.innerHTML = `<div class="cmp-phead"><span class="num"></span><span class="ficon" data-kind="${it.kind}">${ggKindIcon(it.kind, 16)}</span>
+      <div class="cmp-names"><div class="tctx"></div><div class="tname"></div></div>
+      <label class="field notefield" data-tip="Marks / note">${ggIcon('note', 15)}<input class="note" placeholder="Marks / note" aria-label="Marks or note"></label>
+      <button class="ibtn" data-a="side" data-tip="Open in side view" aria-label="Open in side view">${ggIcon('side', 16)}</button></div>
+      <div class="cmp-body"><div class="center"><div class="spinner"></div></div></div>`;
+    pane.querySelector('.num').textContent = it.tile.querySelector('.num').textContent;
+    pane.querySelector('.tctx').textContent = it.context || it.name;
+    pane.querySelector('.tname').textContent = it.context ? it.name : '';
+    if (it.late) pane.querySelector('.cmp-names').insertAdjacentHTML('beforeend', `<span class="lateb" data-tip="${(it.lateText || 'Late').replace(/"/g, '')}">Late</span>`);
+    const note = pane.querySelector('.note');
+    note.value = notes[noteKey(it)] || '';
+    note.oninput = () => saveNote(it, note.value);
+    pane.querySelector('[data-a=side]').onclick = () => { closeCompare(); openModal(it, 'side'); };
+    panes.appendChild(pane);
+    const body = pane.querySelector('.cmp-body');
+    getBlob(it).then(() => {
+      if (!cmpPair || !cmpPair.includes(it)) return;
+      body.innerHTML = '';
+      return renderInto(it.kind, it.blob, body, rendererOpts(it, true)).then(r => cmpCleanups.push(r.cleanup));
+    }).catch(err => { body.innerHTML = '<div class="center"><div class="err">Couldn\'t show this file</div><div class="msg"></div></div>'; body.querySelector('.msg').textContent = err.message || String(err); });
+  });
+}
+$('#cmpClose').onclick = closeCompare;
+$('#cmpSwap').onclick = () => cmpPair && openCompare(cmpPair[1], cmpPair[0]);
+
+// ---------- near-copy detection for Logisim circuits ----------
+const simLevel = (s) => s >= 0.9 ? 'high' : s >= 0.75 ? 'mid' : 'low';
+let simPairs = [];
+$('#findSim').onclick = async () => {
+  closeMenu();
+  const circs = items.filter(i => i.kind === 'circuit');
+  if (circs.length < 2) { setStatus('Need at least 2 Logisim .circ files to compare.'); setTimeout(updateStatus, 4000); return; }
+  const feats = new Map(), texts = new Map();
+  for (const [i, it] of circs.entries()) {
+    setStatus(`Reading circuits… ${i + 1}/${circs.length}`);
+    try {
+      const txt = await (await getBlob(it)).text();
+      const f = circuitFeatures(txt);
+      if (f && f.comps) { feats.set(it, f); texts.set(it, txt.replace(/\s+/g, ' ')); }
+    } catch { /* skip files that fail to load */ }
+  }
+  const list = [...feats.keys()];
+  simPairs = [];
+  for (const it of list) it.sim = { score: 0, other: null, all: new Map() };
+  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+    const a = list[i], b = list[j];
+    const identical = texts.get(a) === texts.get(b);
+    const r = identical ? { score: 1, parts: {} } : circuitSimilarity(feats.get(a), feats.get(b));
+    simPairs.push({ a, b, score: r.score, parts: r.parts, identical });
+    for (const [x, y] of [[a, b], [b, a]]) {
+      x.sim.all.set(y, r.score);
+      if (r.score > x.sim.score) { x.sim.score = r.score; x.sim.other = y; }
+    }
+  }
+  simPairs.sort((p, q) => q.score - p.score);
+  updateStatus();
+  renderSimBadges();
+  renderSimList();
+  $('#simSub').textContent = `${list.length} circuits checked · ${simPairs.length} pairs compared`;
+  $('#simDlg').hidden = false;
+  if (prefs.sort === 'similar') applySort();
+};
+function renderSimBadges() {
+  const th = +$('#simTh').value / 100;
+  for (const it of items) {
+    const b = it.tile.querySelector('.simb');
+    if (!it.sim || !it.sim.other || it.sim.score < th) { b.hidden = true; continue; }
+    const o = it.sim.other;
+    b.hidden = false;
+    b.className = 'simb ' + simLevel(it.sim.score);
+    b.innerHTML = ggIcon('similar', 12) + Math.round(it.sim.score * 100) + '%';
+    b.dataset.tip = `Like ${o.context || o.name}`;
+    b.onclick = (e) => { e.stopPropagation(); openCompare(it, o, it.sim.score); };
+  }
+}
+const GROUP_LABEL = { layout: 'layout', wires: 'wiring', parts: 'parts', labels: 'labels', names: 'subcircuits' };
+function renderSimList() {
+  const th = +$('#simTh').value / 100;
+  $('#simThVal').textContent = Math.round(th * 100) + '%';
+  const box = $('#simList');
+  box.innerHTML = '';
+  const shown = simPairs.filter(p => p.score >= th);
+  if (!shown.length) { box.innerHTML = '<div class="sim-empty">No pairs above this level. Lower the slider to see weaker matches.</div>'; return; }
+  for (const p of shown) {
+    const row = document.createElement('div');
+    row.className = 'sim-row';
+    const who = (it) => `<span class="sim-who"><span class="num">${it.tile.querySelector('.num').textContent}</span><b></b><small></small></span>`;
+    row.innerHTML = `<div class="sim-pct ${simLevel(p.score)}"><span>${Math.round(p.score * 100)}%</span><i style="width:${Math.round(p.score * 100)}%"></i></div>
+      <div class="sim-pair">${who(p.a)}<span class="sim-vs">${ggIcon('swap', 14)}</span>${who(p.b)}
+      <div class="sim-why">${p.identical ? '<em>Identical file</em>' : Object.entries(p.parts).map(([g, v]) => `${GROUP_LABEL[g]} ${Math.round(v * 100)}%`).join(' · ')}</div></div>
+      <button class="btn sim-cmp">${ggIcon('compare', 14)}Compare</button>`;
+    const [wa, wb] = row.querySelectorAll('.sim-who');
+    for (const [w, it] of [[wa, p.a], [wb, p.b]]) { w.querySelector('b').textContent = it.context || it.name; w.querySelector('small').textContent = it.context ? it.name : ''; }
+    row.querySelector('.sim-cmp').onclick = () => { $('#simDlg').hidden = true; openCompare(p.a, p.b, p.score); };
+    box.appendChild(row);
+  }
+}
+$('#simTh').oninput = () => { renderSimList(); renderSimBadges(); };
+$('#simClose').onclick = () => { $('#simDlg').hidden = true; };

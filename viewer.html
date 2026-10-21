@@ -17,7 +17,8 @@
         <a class="source" id="source" target="_blank" rel="noopener"></a>
       </div>
     </div>
-    <div class="tools">
+    <!-- filters: inline when there is room; folded behind the Filters button when the grid is narrow -->
+    <div class="filters" id="filters">
       <label class="field search" data-tip="Search">
         <i data-icon="search" data-size="16"></i>
         <input type="search" id="search" placeholder="Search students or files" aria-label="Search">
@@ -26,6 +27,22 @@
         <select id="kindFilter" aria-label="File type"><option value="">All types</option></select>
         <i data-icon="chevron" data-size="14"></i>
       </label>
+      <label class="field select withicon" data-tip="Sort">
+        <i data-icon="sort" data-size="15"></i>
+        <select id="sortBy" aria-label="Sort cards">
+          <option value="order">Page order</option>
+          <option value="name">Student A–Z</option>
+          <option value="nameDesc">Student Z–A</option>
+          <option value="file">File name</option>
+          <option value="type">File type</option>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="late">Late first</option>
+          <option value="similar">Most similar first</option>
+        </select>
+        <i data-icon="chevron" data-size="14"></i>
+      </label>
+      <button id="lateOnly" class="ibtn toggle" data-tip="Late only" aria-label="Show late submissions only" aria-pressed="false" hidden><i data-icon="clock"></i><span class="count" id="lateCount"></span></button>
       <div class="seg">
         <label class="slider" data-tip="Columns">
           <i data-icon="columns" data-size="16"></i>
@@ -38,6 +55,9 @@
           <input type="range" id="height" min="220" max="1000" step="20" value="440" aria-label="Tile height">
         </label>
       </div>
+    </div>
+    <div class="tools">
+      <button id="filterToggle" class="ibtn" data-tip="Filters" aria-label="Show filters" aria-expanded="false" aria-controls="filters"><i data-icon="filter"></i><span class="dot" id="filterDot" hidden></span></button>
       <button id="addFiles" class="ibtn" data-tip="Add files" aria-label="Add files"><i data-icon="add"></i></button>
       <input type="file" id="fileInput" multiple hidden>
       <div class="menu">
@@ -46,6 +66,9 @@
           <button id="dlAll"><i data-icon="zip" data-size="16"></i>Download all as ZIP</button>
           <button id="exportNotes"><i data-icon="sheet" data-size="16"></i>Export marks (CSV)</button>
           <button id="reloadAll"><i data-icon="retry" data-size="16"></i>Retry failed files</button>
+          <hr>
+          <button id="findSim"><i data-icon="similar" data-size="16"></i>Find similar circuits</button>
+          <button id="showKeys"><i data-icon="keyboard" data-size="16"></i>Keyboard shortcuts<kbd>?</kbd></button>
           <hr>
           <button id="clearNotes" class="danger"><i data-icon="eraser" data-size="16"></i>Clear all notes</button>
         </div>
@@ -66,6 +89,75 @@
   </main>
 
   <div id="dropOverlay" class="drop-overlay" hidden><div><i data-icon="upload" data-size="28"></i>Drop to add files</div></div>
+
+  <!-- selection bar (multi-select) -->
+  <div id="selbar" class="selbar" hidden>
+    <span class="selcount"><b id="selCount">0</b> selected</span>
+    <span class="divider"></span>
+    <button id="selCompare" class="sbtn" data-tip="Pick exactly 2" data-key="C"><i data-icon="compare" data-size="16"></i>Compare</button>
+    <button id="selTabs" class="sbtn"><i data-icon="external" data-size="16"></i>Open in tabs</button>
+    <button id="selDl" class="sbtn"><i data-icon="download" data-size="16"></i>Download</button>
+    <button id="selRm" class="sbtn danger"><i data-icon="trash" data-size="16"></i>Remove</button>
+    <span class="divider"></span>
+    <button id="selAll" class="sbtn" data-key="Ctrl+A">Select all</button>
+    <button id="selClear" class="ibtn" data-tip="Clear" data-key="Esc" aria-label="Clear selection"><i data-icon="close" data-size="16"></i></button>
+  </div>
+
+  <!-- compare two side by side -->
+  <div id="compare" class="compare" hidden>
+    <div class="cmp-head">
+      <div class="cmp-title"><i data-icon="compare" data-size="18"></i>Compare</div>
+      <span id="cmpScore" class="cmp-score" hidden></span>
+      <span class="sp"></span>
+      <button id="cmpSwap" class="ibtn" data-tip="Swap sides" aria-label="Swap sides"><i data-icon="swap"></i></button>
+      <span class="divider"></span>
+      <button id="cmpClose" class="ibtn danger-hover" data-tip="Close" data-key="Esc" aria-label="Close compare"><i data-icon="close"></i></button>
+    </div>
+    <div class="cmp-panes" id="cmpPanes"></div>
+  </div>
+
+  <!-- dialogs -->
+  <div id="simDlg" class="dialog-back" hidden>
+    <div class="dialog wide" role="dialog" aria-labelledby="simTitle">
+      <div class="dlg-head">
+        <div class="dlg-ic"><i data-icon="similar" data-size="18"></i></div>
+        <div><h3 id="simTitle">Similar circuits</h3><p id="simSub"></p></div>
+        <span class="sp"></span>
+        <button class="ibtn" id="simClose" data-tip="Close" data-key="Esc" aria-label="Close"><i data-icon="close"></i></button>
+      </div>
+      <div class="dlg-tools">
+        <label>Show pairs above <b id="simThVal">60%</b><input type="range" id="simTh" min="30" max="100" step="5" value="60"></label>
+      </div>
+      <div class="dlg-body" id="simList"></div>
+      <div class="dlg-foot">A high score means the circuits share the same structure (parts, settings, layout and wiring), even if they were moved or relabelled. Small or template-based tasks naturally score higher, so always compare before deciding.</div>
+    </div>
+  </div>
+
+  <div id="keysDlg" class="dialog-back" hidden>
+    <div class="dialog" role="dialog" aria-labelledby="keysTitle">
+      <div class="dlg-head">
+        <div class="dlg-ic"><i data-icon="keyboard" data-size="18"></i></div>
+        <div><h3 id="keysTitle">Keyboard shortcuts</h3><p>Work through submissions without the mouse.</p></div>
+        <span class="sp"></span>
+        <button class="ibtn" id="keysClose" data-tip="Close" data-key="Esc" aria-label="Close"><i data-icon="close"></i></button>
+      </div>
+      <div class="dlg-body keys">
+        <div><kbd>J</kbd> <kbd>K</kbd><span>Next / previous card</span></div>
+        <div><kbd>←</kbd> <kbd>→</kbd><span>Previous / next file in the large view</span></div>
+        <div><kbd>S</kbd> or <kbd>Enter</kbd><span>Open in side view</span></div>
+        <div><kbd>F</kbd><span>Open full screen</span></div>
+        <div><kbd>N</kbd><span>Type marks / note</span></div>
+        <div><kbd>X</kbd><span>Select card (Shift+X selects a range)</span></div>
+        <div><kbd>Ctrl</kbd> <kbd>A</kbd><span>Select all shown cards</span></div>
+        <div><kbd>C</kbd><span>Compare the 2 selected cards</span></div>
+        <div><kbd>O</kbd><span>Open in new tab</span></div>
+        <div><kbd>D</kbd><span>Download</span></div>
+        <div><kbd>/</kbd><span>Search</span></div>
+        <div><kbd>Esc</kbd><span>Close / clear selection</span></div>
+        <div><kbd>?</kbd><span>Show this list</span></div>
+      </div>
+    </div>
+  </div>
 
   <div id="modal" class="modal" hidden>
     <div class="side-grip" id="sideGrip" data-tip="Drag to resize" aria-hidden="true"></div>

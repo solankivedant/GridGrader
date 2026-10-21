@@ -30,9 +30,16 @@ function ggScanPage(knownExts, includeAll) {
     const rows = [];
     for (let r = a.closest('tr'); r; r = r.parentElement && r.parentElement.closest('tr')) rows.push(r);
     for (const row of rows.reverse()) {
-      const cells = [...row.cells]
-        .map(c => clean(c.innerText))
-        .filter(t => t && t !== linkText && !t.includes(fileName) && t.length < 60 && !junkCell.test(t) && !dateCell.test(t));
+      const cells = [];
+      for (const c of row.cells) {
+        // Moodle's checkbox cell has a hidden label "Select <student name>"
+        const t = clean(c.innerText).replace(/^select\s+(?=\S)/i, '');
+        if (!t || t === linkText || t.includes(fileName) || t.length >= 60 || junkCell.test(t) || dateCell.test(t)) continue;
+        // skip repeats ("Dhruvil Joshi" from the checkbox label and again from the name column)
+        const k = t.toLowerCase();
+        if (cells.some(x => x.toLowerCase().includes(k) || k.includes(x.toLowerCase()))) continue;
+        cells.push(t);
+      }
       if (cells.length) return cells.slice(0, 2).join(' · ');
     }
     let el = a.parentElement;
@@ -46,6 +53,31 @@ function ggScanPage(knownExts, includeAll) {
       if (t.length >= 400) break;
     }
     return '';
+  }
+
+  // Late status and submission time, read from the student's row (or the nearby card).
+  // Moodle: "Assignment was submitted 1 day 4 hours late"; Classroom: "Turned in late" / "Done late".
+  const UNIT = '(?:days?|hours?|hrs?|mins?|minutes?|secs?|seconds?|weeks?)';
+  const lateExact = new RegExp(`(\\d+\\s+${UNIT}(?:,?\\s+\\d+\\s+${UNIT})*)\\s+late\\b`, 'i');
+  const lateWord = /\b(turned in late|done late|submitted late|handed in late|overdue|past due)\b|(^|[\s(])late([\s).,]|$)/i;
+  const dateText = /((?:mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s+)?(\d{1,2}\s+[a-z]{3,9},?\s+\d{4}|[a-z]{3,9}\s+\d{1,2},?\s+\d{4})(,?\s+(at\s+)?\d{1,2}:\d{2}(\s*[ap]\.?m\.?)?)?/i;
+  const parseDate = (s) => {
+    const t = Date.parse(s.replace(/^(mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s+/i, '').replace(/,|\bat\b/gi, ' ').replace(/\s+/g, ' ').replace(/([ap])\.m\./i, '$1m'));
+    return isNaN(t) ? null : t;
+  };
+  function submissionInfo(a) {
+    let box = null;
+    for (let r = a.closest('tr'); r; r = r.parentElement && r.parentElement.closest('tr')) box = r;
+    if (!box) for (let el = a.parentElement, i = 0; el && i < 6; i++, el = el.parentElement) { if (clean(el.innerText).length > 400) break; box = el; }
+    if (!box) return {};
+    const text = clean(box.innerText).replace(clean(a.innerText), ' ');
+    const info = {};
+    const m = text.match(lateExact);
+    if (m) { info.late = true; info.lateText = m[1] + ' late'; }
+    else if (lateWord.test(text) && !/\bnot late\b|\bon time\b/i.test(text)) { info.late = true; info.lateText = 'Late'; }
+    const d = text.match(dateText);
+    if (d) { const t = parseDate(d[0]); if (t) { info.modified = t; info.modifiedText = clean(d[0]); } }
+    return info;
   }
 
   // Site decoration (logos, icons, avatars, header/footer art) is never a submission.
@@ -98,7 +130,7 @@ function ggScanPage(knownExts, includeAll) {
     if (isDecor(a, name, ext)) continue;
     seen.add(url);
 
-    out.push({ url, name: name.slice(0, 140), ext, context: contextFor(a, name), guessed: !ext });
+    out.push({ url, name: name.slice(0, 140), ext, context: contextFor(a, name), guessed: !ext, ...submissionInfo(a) });
   }
 
   // Embedded audio / video players on the page (even when the URL has no extension)

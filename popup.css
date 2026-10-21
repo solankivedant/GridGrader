@@ -30,7 +30,7 @@ button, input { font: inherit; color: inherit; }
 
 header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 4px; }
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
-.brand img { width: 24px; height: 24px; border-radius: 6px; box-shadow: 0 2px 6px rgba(36, 72, 216, .3); }
+.brand img { width: 24px; height: 24px; border-radius: 6px; }
 .ibtn { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg-2); cursor: pointer; }
 .ibtn:hover { background: var(--hover); color: var(--accent); }
 .page { display: flex; align-items: center; gap: 6px; padding: 0 14px 10px; color: var(--muted); border-bottom: 1px solid var(--line); }
@@ -103,7 +103,7 @@ button.link:disabled { color: var(--faint); background: none; cursor: default; }
 .check { display: flex; align-items: center; gap: 6px; color: var(--fg-2); font-size: 12px; cursor: pointer; }
 .check input { accent-color: var(--accent); margin: 0; }
 button.primary { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 38px; border: 0; border-radius: 9px; cursor: pointer;
-  background: linear-gradient(180deg, var(--accent), var(--accent-2)); color: var(--accent-fg); font-weight: 600;
-  box-shadow: 0 1px 2px rgba(36, 72, 216, .3), 0 4px 12px -4px rgba(36, 72, 216, .5), inset 0 1px 0 rgba(255, 255, 255, .15); }
-button.primary:hover { filter: brightness(1.06); }
-button.primary:disabled { opacity: .45; cursor: default; filter: none; box-shadow: none; }
+  background: var(--accent); color: var(--accent-fg); font-weight: 600; box-shadow: none; }
+button.primary:hover { background: var(--accent-2); }
+button.primary:disabled { opacity: .45; cursor: default; background: var(--accent); }
+.item .late { margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 10px; font-weight: 700; color: #fff; background: #e5484d; vertical-align: 1px; }

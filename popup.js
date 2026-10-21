@@ -84,6 +84,7 @@ function render() {
     if (f.context) { const c = document.createElement('div'); c.className = 'ctx'; c.textContent = f.context; mid.appendChild(c); }
     const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = f.ext || ggKindLabel(f.kind); badge.dataset.kind = f.kind;
     const idx = document.createElement('span'); idx.className = 'idx'; idx.textContent = i + 1;
+    if (f.late) { const l = document.createElement("span"); l.className = "late"; l.textContent = "Late"; l.dataset.tip = f.lateText || "Late"; n.appendChild(l); }
     row.append(cb, idx, mid, badge);
     list.appendChild(row);
   });

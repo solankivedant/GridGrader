@@ -1,5 +1,6 @@
 // Renderers: each takes (blob, container, opts) and returns { cleanup, meta }.
 import * as pdfjs from './lib/pdf.min.mjs';
+import { isCfb, docText, rtfText, pptContent } from './legacy.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('./lib/pdf.worker.min.mjs', import.meta.url).href;
 
@@ -38,7 +39,7 @@ export async function sniffKind(blob, fallbackKind, contentType = '') {
     } catch {}
     return 'archive';
   }
-  if (head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) return fallbackKind === 'sheet' ? 'sheet' : 'other'; // old .xls/.doc
+  if (head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) return ['sheet', 'doc', 'slides'].includes(fallbackKind) ? fallbackKind : 'other'; // old .xls/.doc/.ppt
   if (/^image\/(png|jpe?g|gif|webp|avif|bmp|svg\+xml|x-icon)/.test(ct)) return 'image';
   if (/^video\/(mp4|webm|ogg|quicktime)/.test(ct)) return 'video';
   if (/^audio\/(mpeg|mp3|mp4|wav|x-wav|ogg|webm|aac|flac)/.test(ct)) return 'audio';
@@ -217,6 +218,9 @@ async function renderSheet(blob, host, opts) {
 
 // ---------- Word ----------
 async function renderDocx(blob, host, opts) {
+  const head = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
+  if (isCfb(head)) return renderLegacyDoc(docText(new Uint8Array(await blob.arrayBuffer())), host, 'Word 97–2003 (.doc)');
+  if (String.fromCharCode(...head.slice(0, 5)) === '{\\rtf') return renderLegacyDoc(rtfText(await blob.text()), host, 'Rich Text');
   const inner = el('div', 'docx-host');
   host.appendChild(inner);
   await docx.renderAsync(blob, inner, null, {
@@ -239,8 +243,56 @@ async function renderDocx(blob, host, opts) {
   return { cleanup: () => ro.disconnect(), meta: `${pagesN} page${pagesN === 1 ? '' : 's'} · ${words.toLocaleString()} words` };
 }
 
+// ---------- Word 97–2003 / RTF: text preview on a page ----------
+function renderLegacyDoc(text, host, label) {
+  host.appendChild(el('div', 'note-banner', `${label} — text preview. Formatting and images aren't shown; download for the original.`));
+  const page = el('div', 'legacy-page');
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes('\t')) { // consecutive tab-separated lines → table
+      const table = el('table');
+      for (; i < lines.length && lines[i].includes('\t'); i++) {
+        const tr = el('tr');
+        lines[i].replace(/\t+$/, '').split('\t').forEach(c => tr.appendChild(el('td', null, c)));
+        table.appendChild(tr);
+      }
+      i--; page.appendChild(table);
+    } else page.appendChild(el('p', lines[i].trim() ? null : 'gap', lines[i]));
+  }
+  if (!text.trim()) page.appendChild(el('p', 'muted', '(This document has no text.)'));
+  host.appendChild(page);
+  const words = (text.match(/\S+/g) || []).length;
+  return { cleanup: () => {}, meta: `${words.toLocaleString()} words · text preview` };
+}
+
+// ---------- PowerPoint 97–2003 (.ppt): slide text + pictures ----------
+async function renderLegacyPpt(blob, host) {
+  const { slides, pics } = pptContent(new Uint8Array(await blob.arrayBuffer()));
+  const urls = [];
+  host.appendChild(el('div', 'note-banner', 'PowerPoint 97–2003 (.ppt) — slide text and pictures. Layout is not reproduced; download for the full deck.'));
+  const wrap = el('div', 'slides');
+  slides.forEach((texts, i) => {
+    const card = el('div', 'slide');
+    card.appendChild(el('h4', null, `Slide ${i + 1}`));
+    if (texts[0]) card.appendChild(el('div', 'stitle', texts[0]));
+    if (texts.length > 1) card.appendChild(el('div', 'st', texts.slice(1).join('\n')));
+    wrap.appendChild(card);
+  });
+  if (pics.length) {
+    const card = el('div', 'slide');
+    card.appendChild(el('h4', null, `Pictures in this deck (${pics.length}${pics.length >= 24 ? '+' : ''})`));
+    const g = el('div', 'pics');
+    for (const p of pics) { const u = URL.createObjectURL(p); urls.push(u); const im = el('img'); im.src = u; im.loading = 'lazy'; g.appendChild(im); }
+    card.appendChild(g); wrap.appendChild(card);
+  }
+  if (!slides.length && !pics.length) wrap.appendChild(el('div', 'slide', '(No text or pictures found in this deck.)'));
+  host.appendChild(wrap);
+  return { cleanup: () => urls.forEach(URL.revokeObjectURL), meta: `${slides.length} slide${slides.length === 1 ? '' : 's'}${pics.length ? ` · ${pics.length} pictures` : ''}` };
+}
+
 // ---------- PowerPoint (text + images preview) ----------
 async function renderPptx(blob, host) {
+  if (isCfb(new Uint8Array(await blob.slice(0, 8).arrayBuffer()))) return renderLegacyPpt(blob, host);
   const zip = await JSZip.loadAsync(blob);
   const urls = [];
   const wrap = el('div', 'slides');
@@ -430,26 +482,52 @@ async function renderCircuit(blob, host, opts = {}) {
   box.append(stage, stats);
   host.appendChild(box);
 
+  // Breadcrumb trail for subcircuit navigation: main › ALU16 › Adder
+  const crumbs = el('div', 'circ-crumbs');
+  box.insertBefore(crumbs, stage);
+  const byName = new Map(circuits.map(c => [c.getAttribute('name'), c]));
+  let trail = [];
+
   let totalComps = 0;
-  const show = (circ, btn) => {
-    tabs.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
+  const show = (circ) => {
+    const name = circ.getAttribute('name');
+    [...tabs.children].forEach(b => b.classList.toggle('on', b.textContent === name));
     const { svg, summary } = drawCircuit(circ, circuitNames);
     stage.innerHTML = '';
     stage.appendChild(svg);
-    const pz = enablePanZoom(svg);
+    const pz = enablePanZoom(svg, !!opts.large);
     stage.appendChild(zoomBar(pz, !opts.large));
+    svg.addEventListener('dblclick', (e) => {
+      const hit = document.elementFromPoint(e.clientX, e.clientY);
+      const sub = hit && hit.closest && hit.closest('[data-sub]');
+      if (sub && byName.has(sub.dataset.sub)) { e.stopImmediatePropagation(); trail.push(sub.dataset.sub); show(byName.get(sub.dataset.sub)); }
+    }, true);
     stats.textContent = summary + ' · approximate schematic';
     stats.title = stats.textContent;
+    crumbs.hidden = trail.length < 2;
+    crumbs.innerHTML = '';
+    trail.forEach((n, i) => {
+      if (i) crumbs.appendChild(el('span', 'sep', '›'));
+      const b = el('button', i === trail.length - 1 ? 'on' : null, n);
+      b.onclick = () => { trail = trail.slice(0, i + 1); show(byName.get(n)); };
+      crumbs.appendChild(b);
+    });
+    if (trail.length > 1) {
+      const back = el('button', 'back', '← Back');
+      back.onclick = () => { trail.pop(); show(byName.get(trail[trail.length - 1])); };
+      crumbs.prepend(back);
+    }
   };
   let start = circuits[0];
   circuits.forEach(c => {
     totalComps += c.querySelectorAll(':scope > comp').length;
     const b = el('button', null, c.getAttribute('name'));
-    b.onclick = () => show(c, b);
+    b.onclick = () => { trail = [c.getAttribute('name')]; show(c); };
     tabs.appendChild(b);
     if (c.getAttribute('name') === mainName) start = c;
   });
-  show(start, tabs.children[circuits.indexOf(start)]);
+  trail = [start.getAttribute('name')];
+  show(start);
   return { cleanup: () => {}, meta: `${circuits.length} circuit${circuits.length === 1 ? '' : 's'} · ${totalComps} components` };
 }
 
@@ -495,7 +573,10 @@ function drawCircuit(circ, circuitNames) {
       pts.push(loc);
       continue;
     }
-    if (GATES.test(name)) {
+    // A subcircuit is a comp with no library whose name is one of this project's circuits. Check it first:
+    // names like "FullAdder" or "Register8" would otherwise be drawn as the built-in part.
+    if (circuitNames.has(name) && !c.hasAttribute('lib')) { w = Math.max(50, name.length * 6 + 14); h = 40; inner = name; shape = 'sub'; }
+    else if (GATES.test(name)) {
       const g = name.replace(' Gate', '');
       if (g === 'NOT' || g === 'Buffer') { w = sizeAttr <= 30 ? 20 : 30; h = 20; }
       else { w = sizeAttr; h = sizeAttr; }
@@ -513,7 +594,6 @@ function drawCircuit(circ, circuitNames) {
     else if (/Flip-Flop/.test(name)) { w = 40; h = 50; inner = name.split(' ')[0]; }
     else if (/Register|Counter|Shift|RAM|ROM|Random/.test(name)) { w = 50; h = 50; inner = name.split(' ')[0].toUpperCase(); }
     else if (/Adder|Subtractor|Multiplier|Divider|Comparator|Negator|Shifter|Bit Adder|Bit Finder/.test(name)) { w = 40; h = 40; inner = { Adder: '+', Subtractor: '−', Multiplier: '×', Divider: '÷', Comparator: '<>', Negator: '−x' }[name] || name.slice(0, 4); }
-    else if (circuitNames.has(name)) { w = 50; h = 40; inner = name; shape = 'sub'; }
     else { inner = name.slice(0, 6); }
 
     // body sits "behind" the connection point, opposite to facing
@@ -535,7 +615,9 @@ function drawCircuit(circ, circuitNames) {
     } else if (shape === 'splitter') {
       parts.push(`<rect class="cc split" x="${bx[0]}" y="${bx[1]}" width="${bx[2]}" height="${bx[3]}"/>`);
     } else {
-      parts.push(`<rect class="cc${shape === 'sub' ? ' sub' : ''}" x="${bx[0]}" y="${bx[1]}" width="${bx[2]}" height="${bx[3]}" rx="3"/>`);
+      const rect = `<rect class="cc${shape === 'sub' ? ' sub' : ''}" x="${bx[0]}" y="${bx[1]}" width="${bx[2]}" height="${bx[3]}" rx="3"/>`;
+      // subcircuit blocks are clickable: double-click opens the circuit inside
+      parts.push(shape === 'sub' ? `<g class="subc" data-sub="${esc(name)}" data-tip="Open ${esc(name)}" data-key="dbl-click">${rect}</g>` : rect);
       if (inner) texts.push(`<text class="ct small" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle">${esc(inner)}</text>`);
     }
     if (label && shape !== 'tunnel') {
@@ -585,8 +667,9 @@ function gatePath(g, w, h) {
   return s;
 }
 
-// Wheel = pan (Shift+wheel pans sideways), Ctrl+wheel or trackpad pinch = zoom at the pointer.
-function enablePanZoom(svg) {
+// Ctrl+wheel or trackpad pinch = zoom at the pointer; drag = pan.
+// Plain wheel pans only in the large view; in grid cards it is left alone so the page keeps scrolling.
+function enablePanZoom(svg, large) {
   let vb = svg.getAttribute('viewBox').split(' ').map(Number);
   let set = () => svg.setAttribute('viewBox', vb.join(' '));
   const toSvg = (e) => {
@@ -600,11 +683,12 @@ function enablePanZoom(svg) {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       const [px, py] = toSvg(e);
-      const f = Math.min(1.5, Math.max(1 / 1.5, Math.exp(e.deltaY * unit * 0.0025))); // smooth for trackpads, ~1.28× per mouse notch
+      const f = Math.min(2, Math.max(1 / 2, Math.exp(e.deltaY * unit * 0.005))); // ~1.65× per mouse notch, smooth for trackpad pinch
       vb = [px - (px - vb[0]) * f, py - (py - vb[1]) * f, vb[2] * f, vb[3] * f];
       set();
       return;
     }
+    if (!large) return; // grid card: let the page scroll
     e.preventDefault();
     const s = toSvg(e)[2];
     let dx = e.deltaX * unit, dy = e.deltaY * unit;
@@ -639,8 +723,8 @@ function zoomBar(pz, compact) {
   const bar = el('div', compact ? 'zoombar compact' : 'zoombar');
   bar.innerHTML = `<button data-z="out" data-tip="Zoom out" data-key="Ctrl + scroll" aria-label="Zoom out">${ic('zoomOut')}</button><span class="zpct"></span>`
     + `<button data-z="in" data-tip="Zoom in" data-key="Ctrl + scroll" aria-label="Zoom in">${ic('zoomIn')}</button><button data-z="fit" data-tip="Fit view" data-key="dbl-click" aria-label="Fit to screen">${ic('fit')}</button>`;
-  bar.querySelector('[data-z=out]').onclick = () => pz.zoom(1.25);
-  bar.querySelector('[data-z=in]').onclick = () => pz.zoom(1 / 1.25);
+  bar.querySelector('[data-z=out]').onclick = () => pz.zoom(1.5);
+  bar.querySelector('[data-z=in]').onclick = () => pz.zoom(1 / 1.5);
   bar.querySelector('[data-z=fit]').onclick = () => pz.fit();
   bar.addEventListener('pointerdown', (e) => e.stopPropagation());
   pz.onChange((k) => { bar.querySelector('.zpct').textContent = Math.round(k * 100) + '%'; });
