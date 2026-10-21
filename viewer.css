@@ -105,6 +105,10 @@ button.primary:hover { background: var(--accent-2); }
 .bar.compact .filters .field.search { flex: 1 1 200px; }
 .bar.compact .filters .field.search input { width: 100%; }
 .bar.compact .brand span, .bar.compact .left > .divider { display: none; }
+/* very narrow: title gets its own row, buttons go on the row below */
+.bar.narrow .left { flex: 1 1 100%; }
+.bar.narrow .tools { order: 2; flex: 1 1 100%; justify-content: flex-end; }
+.bar.narrow .source { max-width: 100%; }
 
 .menu { position: relative; }
 .menu-pop { position: absolute; right: 0; top: calc(100% + 6px); min-width: 230px; padding: 5px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow-lg); animation: pop .12s ease-out; }
@@ -357,7 +361,9 @@ body.resizing iframe, body.resizing canvas, body.resizing .modal-body { pointer-
 .cg { fill: var(--muted); opacity: .45; }
 
 /* ---------- multi-select + keyboard cursor ---------- */
-.pick { flex: none; display: inline-flex; align-items: center; gap: 0; height: 24px; padding: 0 4px; border: 0; border-radius: 6px; background: none; cursor: pointer; color: var(--faint); }
+.pick { flex: none; align-self: stretch; display: inline-flex; align-items: center; gap: 0; margin: -9px -10px -9px -10px; padding: 0 10px 0 10px; border: 0; border-radius: 0; background: none; cursor: pointer; color: var(--faint); }
+.thead .ficon { cursor: pointer; }
+.pick:hover + .ficon, .thead .ficon:hover { box-shadow: inset 0 0 0 1.5px var(--accent); }
 /* checkbox is always in place (no sliding); it just gets clearer on hover */
 .pick .box { width: 16px; height: 16px; margin-right: 5px; flex: none; display: grid; place-items: center; border-radius: 4px; color: transparent; border: 1.5px solid var(--line); background: var(--panel); }
 .pick .num { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 18px; text-align: right; }
@@ -389,7 +395,8 @@ body.resizing iframe, body.resizing canvas, body.resizing .modal-body { pointer-
 
 /* selection bar */
 .selbar { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 45; display: flex; align-items: center; gap: 6px; padding: 7px 8px 7px 16px;
-  background: #0f172a; color: #e2e8f0; border-radius: 14px; box-shadow: var(--shadow-lg); animation: rise .16s ease-out; max-width: calc(100vw - 24px); flex-wrap: wrap; }
+  background: #0f172a; color: #e2e8f0; border-radius: 14px; box-shadow: var(--shadow-lg); animation: rise .16s ease-out; width: max-content; max-width: calc(100vw - 24px); flex-wrap: nowrap; white-space: nowrap; }
+@media (max-width: 760px) { .selbar .sbtn span { display: none; } .selbar .sbtn { padding: 0 9px; } }
 @keyframes rise { from { transform: translate(-50%, 10px); opacity: 0; } }
 .selbar .selcount { font-size: 13px; margin-right: 4px; white-space: nowrap; }
 .selbar .selcount b { color: #fff; font-variant-numeric: tabular-nums; }
@@ -422,7 +429,11 @@ body.has-selbar main { padding-bottom: 96px; }
 .danger-hover:hover { background: var(--danger) !important; color: #fff !important; }
 .cmp-panes { flex: 1; min-height: 0; display: flex; }
 .cmp-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; container-type: inline-size; }
-.cmp-div { width: 1px; background: var(--line-2); flex: none; }
+.cmp-div { position: relative; flex: none; width: 8px; background: var(--line); border-left: 1px solid var(--line-2); border-right: 1px solid var(--line-2); cursor: col-resize; touch-action: none; }
+.cmp-div::after { content: ""; position: absolute; left: 50%; top: 50%; width: 2px; height: 40px; margin: -20px 0 0 -1px; border-radius: 2px; background: var(--faint); }
+.cmp-div:hover, .cmp-div.drag { background: var(--accent-soft); border-color: var(--accent); }
+.cmp-div:hover::after, .cmp-div.drag::after { background: var(--accent); }
+body.resizing .cmp-body { pointer-events: none; }
 .cmp-phead { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .cmp-phead .num { color: var(--faint); font-size: 11px; font-weight: 600; }
 .cmp-names { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }

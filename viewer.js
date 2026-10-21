@@ -52,7 +52,7 @@ const safe = (s) => (s || '').replace(/[\\/:*?"<>|\n\r\t]+/g, ' ').replace(/\s+/
 
 // ---------- boot ----------
 (async function init() {
-  notes = (await store.get('gg_notes')) || {};
+  notes = await loadNotes();
   const id = new URLSearchParams(location.search).get('job');
   if (id) job = (await store.get('job_' + id)) || job;
   const t = job.page && job.page.title;
@@ -163,7 +163,7 @@ function buildTile(it) {
     lb.dataset.tip = it.lateText || 'Late';
   }
   if (it.modifiedText) t.querySelector('.tnames').title += `\nSubmitted ${it.modifiedText}`;
-  t.querySelector('.pick').onclick = (e) => { e.stopPropagation(); togglePick(it, e.shiftKey); };
+  t.querySelector('.pick').onclick = t.querySelector('.ficon').onclick = (e) => { e.stopPropagation(); togglePick(it, e.shiftKey); };
   t.addEventListener('pointerdown', () => setCursor(it, false));
   t.querySelector('.kind').textContent = it.ext || ggKindLabel(it.kind);
   t.querySelector('.kind').dataset.kind = it.kind;
@@ -192,8 +192,24 @@ function saveNote(it, v) {
   const n = it.tile.querySelector('.note');
   if (n.value !== v) n.value = v;
   n.classList.toggle('has', !!v);
-  clearTimeout(saveNote.t);
-  saveNote.t = setTimeout(() => store.set('gg_notes', notes), 300);
+  persistNotes();
+}
+
+// Notes are saved on every keystroke: synchronously to localStorage (survives an instant refresh)
+// and to extension storage (shared with other GridGrader tabs). On load the newer copy wins.
+function persistNotes() {
+  const t = Date.now();
+  try { localStorage.setItem('gg_notes_local', JSON.stringify({ t, notes })); } catch {}
+  store.set('gg_notes', notes);
+  store.set('gg_notes_t', t);
+}
+async function loadNotes() {
+  const stored = (await store.get('gg_notes')) || {};
+  const storedT = (await store.get('gg_notes_t')) || 0;
+  let local = null;
+  try { local = JSON.parse(localStorage.getItem('gg_notes_local') || 'null'); } catch {}
+  if (local && local.t > storedT) { store.set('gg_notes', local.notes); store.set('gg_notes_t', local.t); return local.notes; }
+  return stored;
 }
 
 function renumber() {
@@ -262,7 +278,7 @@ function updatePicks() {
   cmp.dataset.tip = n === 2 ? 'Compare side by side' : 'Pick exactly 2';
   $('#selTabs').disabled = n > 12;
   $('#selTabs').dataset.tip = n > 12 ? 'Up to 12 at once' : 'One tab each';
-  $('#selDl').innerHTML = ggIcon(n > 1 ? 'zip' : 'download', 16) + (n > 1 ? 'Download ZIP' : 'Download');
+  $('#selDl').innerHTML = ggIcon(n > 1 ? 'zip' : 'download', 16) + `<span>${n > 1 ? 'Download ZIP' : 'Download'}</span>`;
 }
 const pickedList = () => items.filter(i => picked.has(i)); // in grid order
 $('#selClear').onclick = clearPicks;
@@ -547,6 +563,7 @@ function updateKindFilter() {
 // ---------- collapsible filters (narrow grid, e.g. next to the side view) ----------
 const bar = document.querySelector('.bar');
 new ResizeObserver(() => {
+  bar.classList.toggle('narrow', bar.clientWidth < 620);
   const compact = bar.clientWidth < 1180;
   if (compact !== bar.classList.contains('compact')) {
     bar.classList.toggle('compact', compact);
@@ -754,7 +771,7 @@ async function openCompare(a, b, score) {
   const panes = $('#cmpPanes');
   panes.innerHTML = '';
   [a, b].forEach((it, i) => {
-    if (i) panes.appendChild(Object.assign(document.createElement('div'), { className: 'cmp-div' }));
+    if (i) panes.appendChild(compareDivider(panes));
     const pane = document.createElement('section');
     pane.className = 'cmp-pane';
     pane.innerHTML = `<div class="cmp-phead"><span class="num"></span><span class="ficon" data-kind="${it.kind}">${ggKindIcon(it.kind, 16)}</span>
@@ -778,6 +795,26 @@ async function openCompare(a, b, score) {
       return renderInto(it.kind, it.blob, body, rendererOpts(it, true)).then(r => cmpCleanups.push(r.cleanup));
     }).catch(err => { body.innerHTML = '<div class="center"><div class="err">Couldn\'t show this file</div><div class="msg"></div></div>'; body.querySelector('.msg').textContent = err.message || String(err); });
   });
+}
+// The bar between the two panes: drag to change the split, double-click for 50/50. The split is remembered.
+function compareDivider(panes) {
+  const div = Object.assign(document.createElement('div'), { className: 'cmp-div' });
+  div.dataset.tip = 'Drag to resize';
+  const apply = () => {
+    const first = panes.querySelector('.cmp-pane');
+    if (first) first.style.flex = `0 0 calc(${(prefs.cmpSplit || 0.5) * 100}% - 4px)`;
+  };
+  requestAnimationFrame(apply);
+  div.onpointerdown = (e) => {
+    e.preventDefault();
+    div.setPointerCapture(e.pointerId);
+    div.classList.add('drag'); document.body.classList.add('resizing');
+    const r = panes.getBoundingClientRect();
+    div.onpointermove = (ev) => { prefs.cmpSplit = Math.min(0.85, Math.max(0.15, (ev.clientX - r.left) / r.width)); apply(); };
+    div.onpointerup = () => { div.onpointermove = div.onpointerup = null; div.classList.remove('drag'); document.body.classList.remove('resizing'); applyPrefs(); };
+  };
+  div.ondblclick = () => { prefs.cmpSplit = 0.5; apply(); applyPrefs(); };
+  return div;
 }
 $('#cmpClose').onclick = closeCompare;
 $('#cmpSwap').onclick = () => cmpPair && openCompare(cmpPair[1], cmpPair[0]);
