@@ -18,21 +18,28 @@ function ggScanPage(knownExts, includeAll) {
     } catch { return ''; }
   };
 
+  // Table cells that are buttons, statuses, dates or plugin widgets — never a student's name.
+  const junkCell = /^(select|download|view|grade|edit|\d+|-)$|^(submitted|not submitted|no submission|graded|not graded|turned in|handed in|missing|late|on time|draft|assigned|done|needs grading|no attempt|comments?\b|feedback|similarity|originality)|turnitin|resubmit|plagiarism|ouriginal|urkund/i;
+  const dateCell = /\b(19|20)\d\d\b.*\d{1,2}:\d{2}|\d{1,2}:\d{2}.*\b(19|20)\d\d\b/;
+
   // Try to guess who submitted the file: table row cells, a list item, or a nearby card.
   function contextFor(a, fileName) {
     const linkText = clean(a.innerText);
-    const row = a.closest('tr');
-    if (row) {
+    // Plugins like Turnitin nest their own small table inside the file cell, so start from the
+    // outermost row (the student's row) rather than the closest <tr>.
+    const rows = [];
+    for (let r = a.closest('tr'); r; r = r.parentElement && r.parentElement.closest('tr')) rows.push(r);
+    for (const row of rows.reverse()) {
       const cells = [...row.cells]
         .map(c => clean(c.innerText))
-        .filter(t => t && t !== linkText && !t.includes(fileName) && t.length < 60 && !/^(select|download|view|grade|edit|\d+)$/i.test(t) && !/^(submitted|not submitted|no submission|graded|not graded|turned in|handed in|missing|late|on time|draft|assigned|done|needs grading)\b/i.test(t));
+        .filter(t => t && t !== linkText && !t.includes(fileName) && t.length < 60 && !junkCell.test(t) && !dateCell.test(t));
       if (cells.length) return cells.slice(0, 2).join(' · ');
     }
     let el = a.parentElement;
     for (let i = 0; el && i < 6; i++, el = el.parentElement) {
       const t = clean(el.innerText);
       if (t.length > linkText.length + 2 && t.length < 400) {
-        let rest = t.replace(linkText, ' ').replace(fileName, ' ');
+        let rest = t.replace(linkText, ' ').replace(fileName, ' ').replace(/resubmit to turnitin|turnitin|similarity:?\s*\d*%?/gi, ' ');
         rest = clean(rest).split(/ (?:Download|View|Submitted|Due|Turned in)\b/i)[0];
         if (rest.length >= 2) return rest.slice(0, 60);
       }

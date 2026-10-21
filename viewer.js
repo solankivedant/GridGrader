@@ -24,13 +24,24 @@ const MAX_PARALLEL = 3;
 let running = 0;
 const queue = [];
 
-const prefs = Object.assign({ cols: 3, height: 440 }, JSON.parse(localStorage.getItem('gg_prefs') || '{}'));
+const prefs = Object.assign({ cols: 3, height: 440, view: 'side', sideW: 640 }, JSON.parse(localStorage.getItem('gg_prefs') || '{}'));
 applyPrefs();
 
+// Use the chosen column count, but never squeeze tiles below ~280px (e.g. when the side view is open).
+function fitCols() {
+  const main = document.querySelector('main');
+  const avail = main ? main.clientWidth - 36 : innerWidth;
+  const fit = Math.max(1, Math.floor((avail + 40) / (280 + 40)));
+  const n = Math.min(prefs.cols, fit);
+  document.documentElement.style.setProperty('--cols', n);
+  const v = document.getElementById('colsVal');
+  if (v) v.textContent = n < prefs.cols ? `${n}/${prefs.cols}` : prefs.cols;
+}
+
 function applyPrefs() {
-  document.documentElement.style.setProperty('--cols', prefs.cols);
+  fitCols();
   document.documentElement.style.setProperty('--tile-h', prefs.height + 'px');
-  $('#cols').value = prefs.cols; $('#colsVal').textContent = prefs.cols;
+  $('#cols').value = prefs.cols;
   $('#height').value = prefs.height;
   localStorage.setItem('gg_prefs', JSON.stringify(prefs));
 }
@@ -79,6 +90,7 @@ function buildTile(it) {
   t.innerHTML = `
     <div class="thead">
       <span class="num"></span>
+      <span class="ficon"></span>
       <div class="tnames"></div>
       <span class="kind"></span>
       <div class="tact">
@@ -96,6 +108,8 @@ function buildTile(it) {
   names.title = `${it.context ? it.context + ' — ' : ''}${it.name}\nClick for large view`;
   t.querySelector('.kind').textContent = it.ext || ggKindLabel(it.kind);
   t.querySelector('.kind').dataset.kind = it.kind;
+  t.querySelector('.ficon').dataset.kind = it.kind;
+  t.querySelector('.ficon').innerHTML = ggKindIcon(it.kind, 16);
   const orig = t.querySelector('[data-a=orig]');
   if (it.url) orig.href = it.url; else orig.style.display = 'none';
   names.onclick = () => openModal(it);
@@ -187,6 +201,8 @@ async function loadItem(it) {
   it.tile.querySelector('.meta').textContent = it.meta || '';
   it.tile.querySelector('.kind').textContent = it.ext || ggKindLabel(it.kind);
   it.tile.querySelector('.kind').dataset.kind = it.kind;
+  it.tile.querySelector('.ficon').dataset.kind = it.kind;
+  it.tile.querySelector('.ficon').innerHTML = ggKindIcon(it.kind, 16);
 }
 
 function rendererOpts(it, large) {
@@ -383,7 +399,8 @@ async function openModal(it) {
   modalCleanup && modalCleanup(); modalCleanup = null;
   modalItem = it;
   $('#modal').hidden = false;
-  document.body.style.overflow = 'hidden';
+  applyView();
+  if (prefs.view === 'side') it.tile.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   $('#mCtx').textContent = it.context || it.name;
   $('#mName').textContent = it.context ? it.name : (it.meta || '');
   $('#mNote').value = notes[noteKey(it)] || '';
@@ -413,7 +430,7 @@ function closeModal() {
   modalCleanup && modalCleanup(); modalCleanup = null;
   $('#modal').hidden = true;
   $('#mBody').innerHTML = '';
-  document.body.style.overflow = '';
+  applyView();
   if (modalItem) {
     modalItem.tile.scrollIntoView({ block: 'nearest' });
     const t = modalItem.tile; setTimeout(() => t.classList.remove('focus'), 1200);
@@ -427,6 +444,41 @@ function step(d) {
   openModal(vis[(i + d + vis.length) % vis.length]);
 }
 $('#close').onclick = closeModal;
+
+// ---------- side view: large view docked on the right, grid stays usable on the left ----------
+function applyView() {
+  const open = !$('#modal').hidden, side = prefs.view === 'side';
+  const w = Math.round(Math.min(Math.max(prefs.sideW, 360), innerWidth - 320));
+  document.documentElement.style.setProperty('--side-w', w + 'px');
+  $('#modal').classList.toggle('side', side);
+  document.body.classList.toggle('side-open', open && side);
+  document.body.style.overflow = open && !side ? 'hidden' : '';
+  fitCols();
+  const m = $('#mMode');
+  m.innerHTML = ggIcon(side ? 'full' : 'side');
+  m.dataset.tip = side ? 'Full screen' : 'Side view';
+}
+$('#mMode').onclick = () => {
+  prefs.view = prefs.view === 'side' ? 'full' : 'side';
+  applyPrefs(); applyView();
+  if (modalItem && prefs.view === 'side') modalItem.tile.scrollIntoView({ block: 'nearest' });
+};
+$('#sideGrip').onpointerdown = (e) => {
+  e.preventDefault();
+  const grip = e.currentTarget;
+  grip.setPointerCapture(e.pointerId);
+  document.body.classList.add('resizing');
+  grip.onpointermove = (ev) => { prefs.sideW = innerWidth - ev.clientX; applyView(); };
+  grip.onpointerup = () => {
+    grip.onpointermove = grip.onpointerup = null;
+    document.body.classList.remove('resizing');
+    prefs.sideW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--side-w'));
+    applyPrefs();
+  };
+};
+$('#sideGrip').ondblclick = () => { prefs.sideW = Math.round(innerWidth / 2); applyView(); applyPrefs(); };
+addEventListener('resize', () => $('#modal').hidden ? fitCols() : applyView());
+applyView();
 $('#prev').onclick = () => step(-1);
 $('#next').onclick = () => step(1);
 $('#mDl').onclick = () => modalItem && downloadItem(modalItem);

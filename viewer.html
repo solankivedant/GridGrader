@@ -68,6 +68,7 @@
   <div id="dropOverlay" class="drop-overlay" hidden><div><i data-icon="upload" data-size="28"></i>Drop to add files</div></div>
 
   <div id="modal" class="modal" hidden>
+    <div class="side-grip" id="sideGrip" data-tip="Drag to resize" aria-hidden="true"></div>
     <div class="modal-head">
       <div class="navgrp">
         <button class="ibtn" id="prev" data-tip="Previous" data-key="←" aria-label="Previous file"><i data-icon="prev"></i></button>
@@ -84,6 +85,7 @@
       </label>
       <a class="ibtn" id="mOpen" target="_blank" rel="noopener" data-tip="New tab" aria-label="Open original in new tab"><i data-icon="external"></i></a>
       <button class="ibtn" id="mDl" data-tip="Download" aria-label="Download"><i data-icon="download"></i></button>
+      <button class="ibtn" id="mMode" aria-label="Switch view"></button>
       <span class="divider"></span>
       <button class="ibtn" id="close" data-tip="Close" data-key="Esc" aria-label="Close"><i data-icon="close"></i></button>
     </div>

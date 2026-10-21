@@ -58,12 +58,28 @@ header { display: flex; align-items: center; justify-content: space-between; pad
 .item .idx { color: var(--faint); font-size: 11px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .item .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item .ctx { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.badge { --k: var(--muted); padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+.badge { padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
   color: var(--k); background: color-mix(in srgb, var(--k) 12%, transparent); border: 1px solid color-mix(in srgb, var(--k) 22%, transparent); }
-.badge[data-kind=pdf] { --k: #e5484d; } .badge[data-kind=image] { --k: #8e4ec6; } .badge[data-kind=video] { --k: #d6409f; }
-.badge[data-kind=audio] { --k: #e2780b; } .badge[data-kind=doc] { --k: #3e63dd; } .badge[data-kind=sheet] { --k: #18945a; }
-.badge[data-kind=slides] { --k: #e2780b; } .badge[data-kind=notebook] { --k: #dc6a12; } .badge[data-kind=archive] { --k: #7c7f8a; }
-.badge[data-kind=model3d] { --k: #0f9f8f; } .badge[data-kind=circuit] { --k: #0a84d6; }
+/* one colour per file type (tags, icons) */
+[data-kind] { --k: #64748b; }
+[data-kind=pdf] { --k: #e5484d; }
+[data-kind=image] { --k: #8e4ec6; }
+[data-kind=video] { --k: #d6409f; }
+[data-kind=audio] { --k: #d97706; }
+[data-kind=doc] { --k: #2563eb; }
+[data-kind=sheet] { --k: #16a34a; }
+[data-kind=slides] { --k: #ea580c; }
+[data-kind=notebook] { --k: #4f46e5; }
+[data-kind=code] { --k: #475569; }
+[data-kind=archive] { --k: #8b7355; }
+[data-kind=model3d] { --k: #0891b2; }
+[data-kind=circuit] { --k: #0d9488; }
+@media (prefers-color-scheme: dark) {
+  [data-kind=pdf] { --k: #ff6b6f; } [data-kind=image] { --k: #b07ee8; } [data-kind=video] { --k: #ee6bbb; }
+  [data-kind=audio] { --k: #f5a524; } [data-kind=doc] { --k: #5b8cff; } [data-kind=sheet] { --k: #3fca76; }
+  [data-kind=slides] { --k: #ff8a3d; } [data-kind=notebook] { --k: #8b84ff; } [data-kind=code] { --k: #94a3b8; }
+  [data-kind=archive] { --k: #c2a27c; } [data-kind=model3d] { --k: #38c6e8; } [data-kind=circuit] { --k: #2dd4bf; }
+}
 
 .empty { padding: 22px 20px; text-align: center; color: var(--muted); }
 .empty p { margin: 0 0 4px; }
