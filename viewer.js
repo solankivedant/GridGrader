@@ -94,7 +94,8 @@ function buildTile(it) {
       <div class="tnames"></div>
       <span class="kind"></span>
       <div class="tact">
-        <button data-a="large" data-tip="Enlarge" aria-label="Enlarge">${ggIcon('enlarge', 16)}</button>
+        <button data-a="side" data-tip="Side view" aria-label="Open in side view">${ggIcon('side', 16)}</button>
+        <button data-a="full" data-tip="Full screen" aria-label="Open full screen">${ggIcon('full', 16)}</button>
         <a data-a="orig" data-tip="New tab" aria-label="Open in new tab" target="_blank" rel="noopener">${ggIcon('external', 16)}</a>
         <button data-a="dl" data-tip="Download" aria-label="Download">${ggIcon('download', 16)}</button>
         <button data-a="rm" class="danger" data-tip="Remove" aria-label="Remove from grid">${ggIcon('trash', 16)}</button>
@@ -113,7 +114,8 @@ function buildTile(it) {
   const orig = t.querySelector('[data-a=orig]');
   if (it.url) orig.href = it.url; else orig.style.display = 'none';
   names.onclick = () => openModal(it);
-  t.querySelector('[data-a=large]').onclick = () => openModal(it);
+  t.querySelector('[data-a=side]').onclick = () => openModal(it, 'side');
+  t.querySelector('[data-a=full]').onclick = () => openModal(it, 'full');
   t.querySelector('[data-a=dl]').onclick = () => downloadItem(it);
   t.querySelector('[data-a=rm]').onclick = () => removeItem(it);
   const note = t.querySelector('.note');
@@ -395,7 +397,8 @@ addEventListener('drop', (e) => {
 let modalItem = null, modalCleanup = null;
 function visibleItems() { return items.filter(i => i.tile.style.display !== 'none'); }
 
-async function openModal(it) {
+async function openModal(it, mode) {
+  if (mode && mode !== prefs.view) { prefs.view = mode; applyPrefs(); }
   modalCleanup && modalCleanup(); modalCleanup = null;
   modalItem = it;
   $('#modal').hidden = false;
@@ -445,7 +448,7 @@ function step(d) {
 }
 $('#close').onclick = closeModal;
 
-// ---------- side view: large view docked on the right, grid stays usable on the left ----------
+// ---------- side view: large view docked on the left, grid keeps scrolling on the right ----------
 function applyView() {
   const open = !$('#modal').hidden, side = prefs.view === 'side';
   const w = Math.round(Math.min(Math.max(prefs.sideW, 360), innerWidth - 320));
@@ -468,7 +471,7 @@ $('#sideGrip').onpointerdown = (e) => {
   const grip = e.currentTarget;
   grip.setPointerCapture(e.pointerId);
   document.body.classList.add('resizing');
-  grip.onpointermove = (ev) => { prefs.sideW = innerWidth - ev.clientX; applyView(); };
+  grip.onpointermove = (ev) => { prefs.sideW = ev.clientX; applyView(); };
   grip.onpointerup = () => {
     grip.onpointermove = grip.onpointerup = null;
     document.body.classList.remove('resizing');

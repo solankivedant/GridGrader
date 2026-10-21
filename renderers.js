@@ -413,7 +413,7 @@ async function renderModel(blob, host, opts) {
 }
 
 // ---------- Logisim .circ ----------
-async function renderCircuit(blob, host) {
+async function renderCircuit(blob, host, opts = {}) {
   const doc = new DOMParser().parseFromString(await blob.text(), 'application/xml');
   if (doc.querySelector('parsererror')) throw new Error('This .circ file is not valid XML.');
   const circuits = [...doc.querySelectorAll('project > circuit')];
@@ -423,7 +423,7 @@ async function renderCircuit(blob, host) {
 
   const box = el('div', 'circ-host');
   const tabs = el('div', 'tabs');
-  const stage = el('div');
+  const stage = el('div', 'circ-stage');
   stage.style.cssText = 'flex:1;min-height:0;display:flex;';
   const stats = el('div', 'circ-stats');
   if (circuits.length > 1) box.appendChild(tabs);
@@ -436,7 +436,8 @@ async function renderCircuit(blob, host) {
     const { svg, summary } = drawCircuit(circ, circuitNames);
     stage.innerHTML = '';
     stage.appendChild(svg);
-    enablePanZoom(svg);
+    const pz = enablePanZoom(svg);
+    if (opts.large) stage.appendChild(zoomBar(pz));
     stats.textContent = summary + ' · approximate schematic';
     stats.title = stats.textContent;
   };
@@ -586,7 +587,7 @@ function gatePath(g, w, h) {
 
 function enablePanZoom(svg) {
   let vb = svg.getAttribute('viewBox').split(' ').map(Number);
-  const set = () => svg.setAttribute('viewBox', vb.join(' '));
+  let set = () => svg.setAttribute('viewBox', vb.join(' '));
   const toSvg = (e) => {
     const r = svg.getBoundingClientRect();
     const s = Math.max(vb[2] / r.width, vb[3] / r.height);
@@ -608,8 +609,31 @@ function enablePanZoom(svg) {
     set();
   });
   svg.addEventListener('pointerup', () => { drag = null; });
-  svg.addEventListener('dblclick', () => { vb = svg.dataset.home.split(' ').map(Number); set(); });
-  svg.dataset.home = vb.join(' ');
+  const home = [...vb];
+  const listeners = [];
+  const notify = () => listeners.forEach(f => f(home[2] / vb[2]));
+  const set0 = set;
+  set = () => { set0(); notify(); };
+  const fit = () => { vb = [...home]; set(); };
+  svg.addEventListener('dblclick', fit);
+  svg.dataset.home = home.join(' ');
+  // zoom around the centre (buttons)
+  const zoom = (f) => { const cx = vb[0] + vb[2] / 2, cy = vb[1] + vb[3] / 2; vb = [cx - vb[2] * f / 2, cy - vb[3] * f / 2, vb[2] * f, vb[3] * f]; set(); };
+  return { fit, zoom, onChange: (f) => { listeners.push(f); f(home[2] / vb[2]); } };
+}
+
+// Floating Zoom out / % / Zoom in / Fit controls for the large view.
+function zoomBar(pz) {
+  const ic = (n) => (globalThis.ggIcon ? ggIcon(n, 16) : '');
+  const bar = el('div', 'zoombar');
+  bar.innerHTML = `<button data-z="out" data-tip="Zoom out" aria-label="Zoom out">${ic('zoomOut')}</button><span class="zpct"></span>`
+    + `<button data-z="in" data-tip="Zoom in" aria-label="Zoom in">${ic('zoomIn')}</button><button data-z="fit" data-tip="Fit view" data-key="dbl-click" aria-label="Fit to screen">${ic('fit')}</button>`;
+  bar.querySelector('[data-z=out]').onclick = () => pz.zoom(1.25);
+  bar.querySelector('[data-z=in]').onclick = () => pz.zoom(1 / 1.25);
+  bar.querySelector('[data-z=fit]').onclick = () => pz.fit();
+  bar.addEventListener('pointerdown', (e) => e.stopPropagation());
+  pz.onChange((k) => { bar.querySelector('.zpct').textContent = Math.round(k * 100) + '%'; });
+  return bar;
 }
 
 // ---------- fallback: file info, hex, strings ----------
