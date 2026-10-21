@@ -45,8 +45,8 @@ const safe = (s) => (s || '').replace(/[\\/:*?"<>|\n\r\t]+/g, ' ').replace(/\s+/
   if (id) job = (await store.get('job_' + id)) || job;
   const t = job.page && job.page.title;
   document.title = t ? `Grid · ${t}` : 'GridGrader';
-  $('#title').textContent = t || 'GridGrader';
-  if (job.page && job.page.url) { $('#source').href = job.page.url; $('#source').textContent = '← ' + job.page.url; }
+  $('#title').textContent = t || 'New grid';
+  if (job.page && job.page.url) { $('#source').href = job.page.url; $('#source').innerHTML = ggIcon('link', 12); $('#source').append(job.page.url.replace(/^https?:\/\//, '')); $('#source').dataset.tip = 'Source page'; }
   else $('#source').textContent = 'Drop files anywhere to add them';
   for (const f of job.files || []) addItem({ url: f.url, name: f.name, ext: f.ext, kind: f.kind || ggKindOf(f.ext), context: f.context });
   refreshEmpty();
@@ -73,36 +73,29 @@ function addItem(data, afterItem) {
   return it;
 }
 
-const svg = (d) => `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
-const ICON = {
-  expand:   svg('<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>'),
-  external: svg('<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>'),
-  download: svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>'),
-  remove:   svg('<path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/>'),
-};
-
 function buildTile(it) {
   const t = document.createElement('div');
   t.className = 'tile';
   t.innerHTML = `
     <div class="thead">
       <span class="num"></span>
-      <div class="tnames" title="Open large view"></div>
+      <div class="tnames"></div>
       <span class="kind"></span>
       <div class="tact">
-        <button data-a="large" title="Large view">${ICON.expand}<span>Enlarge</span></button>
-        <a data-a="orig" title="Open original in a new tab" target="_blank" rel="noopener">${ICON.external}<span>Open</span></a>
-        <button data-a="dl" title="Download">${ICON.download}<span>Save</span></button>
-        <button data-a="rm" class="danger" title="Remove from grid">${ICON.remove}<span>Remove</span></button>
+        <button data-a="large" data-tip="Enlarge" aria-label="Enlarge">${ggIcon('enlarge', 16)}</button>
+        <a data-a="orig" data-tip="New tab" aria-label="Open in new tab" target="_blank" rel="noopener">${ggIcon('external', 16)}</a>
+        <button data-a="dl" data-tip="Download" aria-label="Download">${ggIcon('download', 16)}</button>
+        <button data-a="rm" class="danger" data-tip="Remove" aria-label="Remove from grid">${ggIcon('trash', 16)}</button>
       </div>
     </div>
     <div class="tbody"><div class="center"><div class="spinner"></div></div></div>
-    <div class="tfoot"><input class="note" placeholder="Marks / note…"><span class="meta"></span></div>`;
+    <div class="tfoot">${ggIcon('note', 14)}<input class="note" placeholder="Add marks or a note…" aria-label="Marks or note"><span class="meta"></span></div>`;
   const names = t.querySelector('.tnames');
   if (it.context) names.appendChild(Object.assign(document.createElement('div'), { className: 'tctx', textContent: it.context }));
   names.appendChild(Object.assign(document.createElement('div'), { className: 'tname', textContent: it.name }));
   names.title = `${it.context ? it.context + ' — ' : ''}${it.name}\nClick for large view`;
   t.querySelector('.kind').textContent = it.ext || ggKindLabel(it.kind);
+  t.querySelector('.kind').dataset.kind = it.kind;
   const orig = t.querySelector('[data-a=orig]');
   if (it.url) orig.href = it.url; else orig.style.display = 'none';
   names.onclick = () => openModal(it);
@@ -186,13 +179,14 @@ async function loadItem(it) {
     body.innerHTML = '';
     const c = document.createElement('div');
     c.className = 'center';
-    c.innerHTML = '<div class="err">Couldn\'t show this file</div><div class="msg"></div><div><button class="btn retry">Retry</button></div>';
+    c.innerHTML = '<div class="err">Couldn\'t show this file</div><div class="msg"></div><div><button class="btn retry">' + ggIcon('retry', 14) + 'Retry</button></div>';
     c.querySelector('.msg').textContent = it.error;
     c.querySelector('.retry').onclick = () => { it.state = 'idle'; enqueue(it); };
     body.appendChild(c);
   }
   it.tile.querySelector('.meta').textContent = it.meta || '';
   it.tile.querySelector('.kind').textContent = it.ext || ggKindLabel(it.kind);
+  it.tile.querySelector('.kind').dataset.kind = it.kind;
 }
 
 function rendererOpts(it, large) {
@@ -362,7 +356,7 @@ $('#moreBtn').onclick = (e) => { e.stopPropagation(); $('#morePop').hidden = !$(
 document.addEventListener('click', (e) => { if (!e.target.closest('.menu')) closeMenu(); });
 
 // ---------- local files ----------
-$('#addFiles').onclick = () => $('#fileInput').click();
+$('#addFiles').onclick = $('#emptyAdd').onclick = () => $('#fileInput').click();
 $('#fileInput').onchange = (e) => { addLocal(e.target.files); e.target.value = ''; };
 function addLocal(fileList) {
   for (const f of fileList) {
@@ -393,6 +387,8 @@ async function openModal(it) {
   $('#mCtx').textContent = it.context || it.name;
   $('#mName').textContent = it.context ? it.name : (it.meta || '');
   $('#mNote').value = notes[noteKey(it)] || '';
+  const vis = visibleItems();
+  $('#mPos').textContent = vis.includes(it) ? `${vis.indexOf(it) + 1} / ${vis.length}` : '';
   const o = $('#mOpen');
   if (it.url) { o.href = it.url; o.style.display = ''; } else o.style.display = 'none';
   const body = $('#mBody');

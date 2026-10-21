@@ -8,39 +8,52 @@
 <body>
   <header>
     <div class="brand"><img src="icons/icon32.png" alt=""><span>GridGrader</span></div>
-    <div id="pageTitle" class="page-title">Scanning page…</div>
+    <button id="rescan" class="ibtn" data-tip="Rescan page" aria-label="Rescan page"><i data-icon="retry" data-size="16"></i></button>
   </header>
+  <div class="page">
+    <i data-icon="link" data-size="13"></i>
+    <div id="pageTitle" class="page-title">Scanning page…</div>
+  </div>
 
   <div class="controls">
-    <input id="search" type="search" placeholder="Filter by name or student…">
+    <label class="field">
+      <i data-icon="search" data-size="15"></i>
+      <input id="search" type="search" placeholder="Filter by name or student" aria-label="Filter">
+    </label>
     <div id="chips" class="chips"></div>
   </div>
 
   <div id="list" class="list"></div>
 
   <div id="empty" class="empty" hidden>
-    <p><strong>No files found on this page.</strong></p>
-    <p>Turn on <em>Include all links</em> below, or open an empty grid and drag downloaded files into it.</p>
+    <div class="empty-ic"><i data-icon="search" data-size="22"></i></div>
+    <p><strong>No files found on this page</strong></p>
+    <p>Turn on <em>Include all links</em> below, or open an empty grid and drag files into it.</p>
   </div>
 
   <footer>
-    <div class="range" id="rangeRow" title="Select only files #from to #to of the list above">
-      <span>Open files</span>
-      <input type="number" id="rFrom" min="1" value="1" aria-label="From">
-      <span>to</span>
-      <input type="number" id="rTo" min="1" value="1" aria-label="To">
+    <div class="range" id="rangeRow">
+      <span class="lbl">Range</span>
+      <input type="number" id="rFrom" min="1" value="1" aria-label="From" data-tip="First file">
+      <span class="dash">–</span>
+      <input type="number" id="rTo" min="1" value="1" aria-label="To" data-tip="Last file">
       <span class="of" id="rOf"></span>
-      <button id="rApply" class="ghost">Select range</button>
+      <button id="rApply" class="ghost" data-tip="Select range">Select</button>
     </div>
     <div class="row">
-      <label class="check"><input type="checkbox" id="selectAll" checked> Select all</label>
-      <label class="check" title="Also list links that don't look like files"><input type="checkbox" id="includeAll"> Include all links</label>
+      <div class="selbtns">
+        <button id="selAll" class="link" data-tip="Tick all">Select all</button>
+        <span class="sep"></span>
+        <button id="selNone" class="link" data-tip="Untick all">Deselect all</button>
+      </div>
+      <label class="check"><input type="checkbox" id="includeAll"> Include all links</label>
     </div>
-    <button id="open" class="primary">Open in grid</button>
+    <button id="open" class="primary"><i data-icon="grid" data-size="16"></i><span id="openLabel">Open in grid</span></button>
   </footer>
 
   <script src="types.js"></script>
   <script src="scanner.js"></script>
+  <script src="ui.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

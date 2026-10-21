@@ -40,7 +40,8 @@ async function scan() {
   }
   $('#pageTitle').textContent = `${files.length} file${files.length === 1 ? '' : 's'} on “${page.title || tab.title}”`;
   selected.clear();
-  for (const f of files) if (!f.guessed) selected.add(f.url);
+  // Images are listed but not ticked: on most pages they are logos or page art, not submissions.
+  for (const f of files) if (!f.guessed && f.kind !== 'image') selected.add(f.url);
   for (const f of files) if (!(f.kind in firstOpen)) { firstOpen[f.kind] = true; activeKinds.add(f.kind); }
   render();
 }
@@ -81,21 +82,23 @@ function render() {
     const n = document.createElement('div'); n.className = 'name'; n.textContent = f.name;
     mid.appendChild(n);
     if (f.context) { const c = document.createElement('div'); c.className = 'ctx'; c.textContent = f.context; mid.appendChild(c); }
-    const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = f.ext || ggKindLabel(f.kind);
+    const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = f.ext || ggKindLabel(f.kind); badge.dataset.kind = f.kind;
     const idx = document.createElement('span'); idx.className = 'idx'; idx.textContent = i + 1;
     row.append(cb, idx, mid, badge);
     list.appendChild(row);
   });
   $('#empty').hidden = files.length > 0;
   syncRange(vis.length);
-  $('#selectAll').checked = vis.length > 0 && vis.every(f => selected.has(f.url));
   updateButton();
 }
 
 function updateButton() {
-  const n = visibleFiles().filter(f => selected.has(f.url)).length;
+  const vis = visibleFiles();
+  const n = vis.filter(f => selected.has(f.url)).length;
+  $('#selAll').disabled = n === vis.length;
+  $('#selNone').disabled = selected.size === 0;
   const btn = $('#open');
-  btn.textContent = n ? `Open ${n} file${n === 1 ? '' : 's'} in grid` : (files.length ? 'Select files to open' : 'Open empty grid');
+  $('#openLabel').textContent = n ? `Open ${n} file${n === 1 ? '' : 's'} in grid` : (files.length ? 'Select files to open' : 'Open empty grid');
   btn.disabled = files.length > 0 && n === 0;
 }
 
@@ -116,6 +119,7 @@ function applyRange() {
   const clamp = (v, d) => Math.min(vis.length, Math.max(1, parseInt(v, 10) || d));
   let a = clamp($('#rFrom').value, 1), b = clamp($('#rTo').value, vis.length);
   if (a > b) [a, b] = [b, a];
+  rangeTouched = true;
   $('#rFrom').value = a; $('#rTo').value = b;
   vis.forEach((f, i) => (i >= a - 1 && i < b) ? selected.add(f.url) : selected.delete(f.url));
   render();
@@ -124,12 +128,11 @@ function applyRange() {
 $('#rFrom').oninput = $('#rTo').oninput = () => { rangeTouched = true; };
 $('#rFrom').onkeydown = $('#rTo').onkeydown = (e) => { if (e.key === 'Enter') applyRange(); };
 $('#rApply').onclick = applyRange;
+$('#rescan').onclick = scan;
 $('#search').oninput = render;
 $('#includeAll').onchange = scan;
-$('#selectAll').onchange = (e) => {
-  for (const f of visibleFiles()) e.target.checked ? selected.add(f.url) : selected.delete(f.url);
-  render();
-};
+$('#selAll').onclick = () => { for (const f of visibleFiles()) selected.add(f.url); render(); };
+$('#selNone').onclick = () => { selected.clear(); render(); };
 
 $('#open').onclick = async () => {
   const chosen = visibleFiles().filter(f => selected.has(f.url));

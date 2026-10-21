@@ -41,6 +41,12 @@ function ggScanPage(knownExts, includeAll) {
     return '';
   }
 
+  // Site decoration (logos, icons, avatars, header/footer art) is never a submission.
+  const IMG_EXTS = new Set(['png','jpg','jpeg','gif','webp','bmp','svg','ico','avif']);
+  const decorRe = /logo|favicon|icon|avatar|banner|sprite|badge|emoji|spinner|loader|placeholder/i;
+  const inChrome = (el) => !!el.closest('header, nav, footer, [role=banner], [role=navigation], [role=contentinfo], .navbar, .logo, .brand');
+  const isDecor = (el, name, ext) => IMG_EXTS.has(ext) && (decorRe.test(name) || inChrome(el));
+
   const anchors = document.querySelectorAll('a[href]');
   for (const a of anchors) {
     const raw = a.getAttribute('href') || '';
@@ -82,6 +88,7 @@ function ggScanPage(knownExts, includeAll) {
       ext = extOf(name);
     }
     if (seen.has(url)) continue;
+    if (isDecor(a, name, ext)) continue;
     seen.add(url);
 
     out.push({ url, name: name.slice(0, 140), ext, context: contextFor(a, name), guessed: !ext });
@@ -108,9 +115,12 @@ function ggScanPage(knownExts, includeAll) {
     const name = lastSeg(url);
     const ext = extOf(name);
     if (!ext || !known.has(ext)) continue;
-    if (el.tagName === 'IMG' && (el.naturalWidth < 120 || el.naturalHeight < 120)) continue; // skip icons
+    if (el.tagName === 'IMG') {
+      if (el.naturalWidth < 120 || el.naturalHeight < 120) continue; // skip icons
+      if (isDecor(el, name + ' ' + (el.alt || '') + ' ' + (el.className || ''), ext)) continue;
+    }
     seen.add(url);
-    out.push({ url, name, ext, context: '', guessed: false, embedded: true });
+    out.push({ url, name, ext, context: el.alt ? clean(el.alt).slice(0, 60) : '', guessed: false, embedded: true });
   }
 
   return { title: document.title, url: location.href, files: out, isTop: window === window.top };

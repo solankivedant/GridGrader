@@ -396,7 +396,7 @@ async function renderModel(blob, host, opts) {
     img.style.background = 'transparent';
     img.src = renderer.domElement.toDataURL('image/png');
     wrap.appendChild(img);
-    wrap.appendChild(el('div', 'hint', 'Open large view (⤢) to rotate'));
+    wrap.appendChild(el('div', 'hint', 'Enlarge to rotate'));
     renderer.dispose(); renderer.forceContextLoss();
     return { cleanup: () => {}, meta };
   }

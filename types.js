@@ -12,7 +12,7 @@ const GG_KINDS = {
   code:    { label: 'Code/Text', exts: ['txt','md','markdown','log','c','h','cpp','cc','cxx','hpp','java','py','js','mjs','ts','jsx','tsx','json','xml','html','htm','css','scss','sql','sh','bash','bat','ps1','yml','yaml','ini','toml','cfg','v','sv','vhd','vhdl','m','r','rb','go','rs','kt','kts','swift','php','cs','dart','lua','pl','asm','s','tex','bib','gradle','properties','env','gitignore'] },
   archive: { label: 'ZIP',     exts: ['zip'] },
   model3d: { label: '3D (STL/OBJ)', exts: ['stl','obj'] },
-  circuit: { label: 'Logisim', exts: ['circ'] },
+  circuit: { label: 'Logisim .circ', exts: ['circ'] },
 };
 
 // Kinds that are NOT offered in the page-scan selection (still viewable inside ZIPs or via drag-drop).

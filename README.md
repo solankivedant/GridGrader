@@ -17,7 +17,7 @@ A Chrome / Edge / Brave extension that finds every submitted file on a page and 
 3. Untick anything you don't want, or use **Open files [from] to [to] → Select range** to pick e.g. files #1–10, then click **Open N files in grid**.
 4. In the grid:
    - **Columns** and **Height** sliders: how many files you see at once.
-   - **Enlarge** (or click the name): large view. Use ← → to move between students and Esc to close.
+   - Hover any icon to see what it does. **Enlarge** (or click the name) opens the large view. Use ← → to move between students and Esc to close.
    - **Marks / note** box under each file: saved automatically. Export them with **More → Export marks/notes (CSV)**.
    - **More → Download all as ZIP**: one ZIP with every file, named by student.
    - **+ Add files**, or drag files onto the page, to view files from your computer.
