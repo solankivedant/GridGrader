@@ -69,7 +69,8 @@ button.primary:hover { background: var(--accent-2); }
 .field.search input::placeholder { color: var(--faint); }
 .field.select select { appearance: none; padding: 0 30px 0 12px; cursor: pointer; font-weight: 500; }
 .field.select select option { background: var(--panel); color: var(--fg); }
-.field.select .ic { position: absolute; right: 10px; pointer-events: none; }
+.field.select .ic { pointer-events: none; }
+.field.select .ic:last-child { position: absolute; right: 10px; } /* dropdown arrow; a leading icon (Sort) stays in the flow */
 
 .seg { display: flex; align-items: center; height: 34px; padding: 0 4px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel); box-shadow: var(--shadow-sm); }
 .seg-div { width: 1px; height: 18px; background: var(--line); }
@@ -357,9 +358,10 @@ body.resizing iframe, body.resizing canvas, body.resizing .modal-body { pointer-
 
 /* ---------- multi-select + keyboard cursor ---------- */
 .pick { flex: none; display: inline-flex; align-items: center; gap: 0; height: 24px; padding: 0 4px; border: 0; border-radius: 6px; background: none; cursor: pointer; color: var(--faint); }
-.pick .box { width: 0; height: 16px; overflow: hidden; display: grid; place-items: center; border-radius: 4px; color: transparent; transition: width .12s, margin .12s; }
+/* checkbox is always in place (no sliding); it just gets clearer on hover */
+.pick .box { width: 16px; height: 16px; margin-right: 5px; flex: none; display: grid; place-items: center; border-radius: 4px; color: transparent; border: 1.5px solid var(--line); background: var(--panel); }
 .pick .num { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 18px; text-align: right; }
-.tile:hover .pick .box, .tile.picked .pick .box, body.has-selbar .pick .box { width: 16px; margin-right: 5px; border: 1.5px solid var(--line-2); background: var(--panel); }
+.tile:hover .pick .box, body.has-selbar .pick .box { border-color: var(--line-2); }
 .pick:hover .box { border-color: var(--accent) !important; }
 .tile.picked .pick .box { background: var(--accent) !important; border-color: var(--accent) !important; color: #fff; }
 .tile.picked { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 3%, var(--panel)); }
