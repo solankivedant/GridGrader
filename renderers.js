@@ -437,7 +437,7 @@ async function renderCircuit(blob, host, opts = {}) {
     stage.innerHTML = '';
     stage.appendChild(svg);
     const pz = enablePanZoom(svg);
-    if (opts.large) stage.appendChild(zoomBar(pz));
+    stage.appendChild(zoomBar(pz, !opts.large));
     stats.textContent = summary + ' · approximate schematic';
     stats.title = stats.textContent;
   };
@@ -585,6 +585,7 @@ function gatePath(g, w, h) {
   return s;
 }
 
+// Wheel = pan (Shift+wheel pans sideways), Ctrl+wheel or trackpad pinch = zoom at the pointer.
 function enablePanZoom(svg) {
   let vb = svg.getAttribute('viewBox').split(' ').map(Number);
   let set = () => svg.setAttribute('viewBox', vb.join(' '));
@@ -595,10 +596,20 @@ function enablePanZoom(svg) {
     return [vb[0] - ox + (e.clientX - r.left) * s, vb[1] - oy + (e.clientY - r.top) * s, s];
   };
   svg.addEventListener('wheel', (e) => {
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? svg.clientHeight : 1; // lines / pages → px
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const [px, py] = toSvg(e);
+      const f = Math.min(1.5, Math.max(1 / 1.5, Math.exp(e.deltaY * unit * 0.0025))); // smooth for trackpads, ~1.28× per mouse notch
+      vb = [px - (px - vb[0]) * f, py - (py - vb[1]) * f, vb[2] * f, vb[3] * f];
+      set();
+      return;
+    }
     e.preventDefault();
-    const [px, py] = toSvg(e);
-    const f = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-    vb = [px - (px - vb[0]) * f, py - (py - vb[1]) * f, vb[2] * f, vb[3] * f];
+    const s = toSvg(e)[2];
+    let dx = e.deltaX * unit, dy = e.deltaY * unit;
+    if (e.shiftKey && !dx) { dx = dy; dy = 0; }
+    vb = [vb[0] + dx * s, vb[1] + dy * s, vb[2], vb[3]];
     set();
   }, { passive: false });
   let drag = null;
@@ -623,11 +634,11 @@ function enablePanZoom(svg) {
 }
 
 // Floating Zoom out / % / Zoom in / Fit controls for the large view.
-function zoomBar(pz) {
+function zoomBar(pz, compact) {
   const ic = (n) => (globalThis.ggIcon ? ggIcon(n, 16) : '');
-  const bar = el('div', 'zoombar');
-  bar.innerHTML = `<button data-z="out" data-tip="Zoom out" aria-label="Zoom out">${ic('zoomOut')}</button><span class="zpct"></span>`
-    + `<button data-z="in" data-tip="Zoom in" aria-label="Zoom in">${ic('zoomIn')}</button><button data-z="fit" data-tip="Fit view" data-key="dbl-click" aria-label="Fit to screen">${ic('fit')}</button>`;
+  const bar = el('div', compact ? 'zoombar compact' : 'zoombar');
+  bar.innerHTML = `<button data-z="out" data-tip="Zoom out" data-key="Ctrl + scroll" aria-label="Zoom out">${ic('zoomOut')}</button><span class="zpct"></span>`
+    + `<button data-z="in" data-tip="Zoom in" data-key="Ctrl + scroll" aria-label="Zoom in">${ic('zoomIn')}</button><button data-z="fit" data-tip="Fit view" data-key="dbl-click" aria-label="Fit to screen">${ic('fit')}</button>`;
   bar.querySelector('[data-z=out]').onclick = () => pz.zoom(1.25);
   bar.querySelector('[data-z=in]').onclick = () => pz.zoom(1 / 1.25);
   bar.querySelector('[data-z=fit]').onclick = () => pz.fit();

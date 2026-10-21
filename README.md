@@ -19,7 +19,7 @@ A Chrome / Edge / Brave extension that finds every submitted file on a page and 
    - **Columns** and **Height** sliders: how many files you see at once.
    - Hover any icon to see what it does. Each file has **Side view** and **Full screen** buttons (clicking the name uses the last one you picked). Use ← → to move between students and Esc to close.
    - **Side view** docks the file on the left while the other submissions keep scrolling on the right. Drag the panel's right edge to resize it, or double-click the edge for half the screen.
-   - **Logisim circuits** in the large view have zoom in/out and **Fit view** buttons (double-clicking the drawing also fits it).
+   - **Logisim circuits**: in the large view, scroll to move around (Shift+scroll sideways), **Ctrl+scroll** or pinch to zoom, drag to pan, and **Fit view** (or double-click) to see the whole circuit. Grid cards work the same way, with a small zoom bar when you hover the card (scroll in the gaps between cards to scroll the page).
    - **Marks / note** box under each file: saved automatically. Export them with **More → Export marks/notes (CSV)**.
    - **More → Download all as ZIP**: one ZIP with every file, named by student.
    - **+ Add files**, or drag files onto the page, to view files from your computer.
