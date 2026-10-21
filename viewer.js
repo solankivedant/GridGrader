@@ -156,7 +156,7 @@ function buildTile(it) {
   const names = t.querySelector('.tnames');
   if (it.context) names.appendChild(Object.assign(document.createElement('div'), { className: 'tctx', textContent: it.context }));
   names.appendChild(Object.assign(document.createElement('div'), { className: 'tname', textContent: it.name }));
-  names.title = `${it.context ? it.context + ' — ' : ''}${it.name}\nClick for large view · Ctrl+click to select`;
+  names.title = `${it.context ? it.context + ' - ' : ''}${it.name}\nClick for large view · Ctrl+click to select`;
   if (it.late) {
     const lb = t.querySelector('.lateb');
     lb.hidden = false;
@@ -252,6 +252,8 @@ function clearPicks() { picked.clear(); updatePicks(); }
 function updatePicks() {
   for (const it of items) it.tile.classList.toggle('picked', picked.has(it));
   const n = picked.size;
+  // "Selected only" follows the selection; clearing it brings every card back
+  if (selectedOnly) { if (!n) setSortMenu(prefs.sort); else applyFilter(); }
   $('#selbar').hidden = n === 0;
   document.body.classList.toggle('has-selbar', n > 0);
   $('#selCount').textContent = n;
@@ -380,7 +382,7 @@ async function getBlob(it) {
     }
     if (!blob) {
       if (lastErr && lastErr.message === 'htmlpage')
-        throw new Error('The site returned a web page instead of the file (a login or preview page). Make sure you\'re signed in, then Retry — or use Open to view it on the site.');
+        throw new Error('The site returned a web page instead of the file (a login or preview page). Make sure you\'re signed in, then Retry - or use Open to view it on the site.');
       throw new Error((lastErr && lastErr.message) || 'Download failed.');
     }
   }
@@ -511,7 +513,15 @@ function applySort() {
   for (const it of items) grid.appendChild(it.tile);
   renumber();
 }
-$('#sortBy').onchange = (e) => { prefs.sort = e.target.value; applyPrefs(); applySort(); updateFilterDot(); };
+// "Selected only" lives in the same menu: it hides every card that isn't ticked (page order is kept).
+let selectedOnly = false;
+function setSortMenu(v) {
+  selectedOnly = v === 'selected';
+  if (!selectedOnly) prefs.sort = v;
+  $('#sortBy').value = selectedOnly ? 'selected' : prefs.sort;
+  applyPrefs(); applySort(); applyFilter();
+}
+$('#sortBy').onchange = (e) => setSortMenu(e.target.value);
 
 // ---------- toolbar ----------
 $('#cols').oninput = (e) => { prefs.cols = +e.target.value; applyPrefs(); };
@@ -522,7 +532,7 @@ function applyFilter() {
   const q = $('#search').value.trim().toLowerCase();
   const k = $('#kindFilter').value;
   for (const it of items) {
-    const ok = (!k || it.kind === k) && (!lateOnly || it.late) && (!q || it.name.toLowerCase().includes(q) || (it.context || '').toLowerCase().includes(q) || (notes[noteKey(it)] || '').toLowerCase().includes(q));
+    const ok = (!k || it.kind === k) && (!lateOnly || it.late) && (!selectedOnly || picked.has(it)) && (!q || it.name.toLowerCase().includes(q) || (it.context || '').toLowerCase().includes(q) || (notes[noteKey(it)] || '').toLowerCase().includes(q));
     it.tile.style.display = ok ? '' : 'none';
   }
   renumber(); updateStatus(); updateFilterDot();
@@ -551,7 +561,7 @@ function setFiltersOpen(open) {
 }
 $('#filterToggle').onclick = () => setFiltersOpen(!bar.classList.contains('open'));
 function updateFilterDot() {
-  const active = !!$('#search').value.trim() || !!$('#kindFilter').value || lateOnly || prefs.sort !== 'order';
+  const active = !!$('#search').value.trim() || !!$('#kindFilter').value || lateOnly || selectedOnly || prefs.sort !== 'order';
   $('#filterDot').hidden = !active;
 }
 

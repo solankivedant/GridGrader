@@ -18,7 +18,7 @@ function ggScanPage(knownExts, includeAll) {
     } catch { return ''; }
   };
 
-  // Table cells that are buttons, statuses, dates or plugin widgets — never a student's name.
+  // Table cells that are buttons, statuses, dates or plugin widgets - never a student's name.
   const junkCell = /^(select|download|view|grade|edit|\d+|-)$|^(submitted|not submitted|no submission|graded|not graded|turned in|handed in|missing|late|on time|draft|assigned|done|needs grading|no attempt|comments?\b|feedback|similarity|originality)|turnitin|resubmit|plagiarism|ouriginal|urkund/i;
   const dateCell = /\b(19|20)\d\d\b.*\d{1,2}:\d{2}|\d{1,2}:\d{2}.*\b(19|20)\d\d\b/;
 

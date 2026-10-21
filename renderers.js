@@ -186,7 +186,7 @@ async function renderCode(blob, host, opts) {
   for (const ln of lines.slice(0, LIMIT)) frag.appendChild(el('span', 'l', ln || ' '));
   pre.appendChild(frag);
   host.appendChild(pre);
-  if (lines.length > LIMIT || blob.size > MAX_TEXT) host.appendChild(el('div', 'trunc', 'File truncated in preview — download for the full file.'));
+  if (lines.length > LIMIT || blob.size > MAX_TEXT) host.appendChild(el('div', 'trunc', 'File truncated in preview - download for the full file.'));
   return { cleanup: () => {}, meta: `${lines.length.toLocaleString()} lines` };
 }
 
@@ -245,7 +245,7 @@ async function renderDocx(blob, host, opts) {
 
 // ---------- Word 97–2003 / RTF: text preview on a page ----------
 function renderLegacyDoc(text, host, label) {
-  host.appendChild(el('div', 'note-banner', `${label} — text preview. Formatting and images aren't shown; download for the original.`));
+  host.appendChild(el('div', 'note-banner', `${label} - text preview. Formatting and images aren't shown; download for the original.`));
   const page = el('div', 'legacy-page');
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
@@ -269,7 +269,7 @@ function renderLegacyDoc(text, host, label) {
 async function renderLegacyPpt(blob, host) {
   const { slides, pics } = pptContent(new Uint8Array(await blob.arrayBuffer()));
   const urls = [];
-  host.appendChild(el('div', 'note-banner', 'PowerPoint 97–2003 (.ppt) — slide text and pictures. Layout is not reproduced; download for the full deck.'));
+  host.appendChild(el('div', 'note-banner', 'PowerPoint 97–2003 (.ppt) - slide text and pictures. Layout is not reproduced; download for the full deck.'));
   const wrap = el('div', 'slides');
   slides.forEach((texts, i) => {
     const card = el('div', 'slide');
@@ -296,7 +296,7 @@ async function renderPptx(blob, host) {
   const zip = await JSZip.loadAsync(blob);
   const urls = [];
   const wrap = el('div', 'slides');
-  host.appendChild(el('div', 'note-banner', 'Slide text & images preview — layout is not reproduced. Download for the full deck.'));
+  host.appendChild(el('div', 'note-banner', 'Slide text & images preview - layout is not reproduced. Download for the full deck.'));
   const thumb = zip.file('docProps/thumbnail.jpeg');
   if (thumb) {
     const u = URL.createObjectURL(await thumb.async('blob')); urls.push(u);
@@ -639,7 +639,7 @@ function drawCircuit(circ, circuitNames) {
     <rect x="${vb[0] - 5000}" y="${vb[1] - 5000}" width="${vb[2] + 10000}" height="${vb[3] + 10000}" fill="url(#gg-dots)"/>
     ${parts.join('')}${texts.join('')}`;
   const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([n, k]) => `${k}× ${n.replace(' Gate', '')}`).join(', ');
-  const summary = `${circ.getAttribute('name')}: ${comps.length} components, ${wires.length} wires${top ? ' — ' + top : ''}`;
+  const summary = `${circ.getAttribute('name')}: ${comps.length} components, ${wires.length} wires${top ? ' - ' + top : ''}`;
   return { svg, summary };
 }
 
@@ -733,13 +733,13 @@ function zoomBar(pz, compact) {
 
 // ---------- fallback: file info, hex, strings ----------
 const SPECIAL = {
-  dwg: 'AutoCAD DWG is a closed format — open it in AutoCAD, DWG TrueView (free) or LibreCAD.',
-  dxf: 'DXF drawing — open in LibreCAD, FreeCAD or AutoCAD.',
-  step: 'STEP CAD model — open in FreeCAD or any CAD tool.', stp: 'STEP CAD model — open in FreeCAD or any CAD tool.',
-  iges: 'IGES CAD model — open in FreeCAD.', igs: 'IGES CAD model — open in FreeCAD.',
-  sldprt: 'SolidWorks part — needs SolidWorks or eDrawings.', sldasm: 'SolidWorks assembly — needs SolidWorks or eDrawings.',
-  doc: 'Old Word .doc format — download and open in Word/LibreOffice.', ppt: 'Old PowerPoint .ppt — download to open.',
-  rar: 'RAR archive — extract with 7-Zip/WinRAR.', '7z': '7-Zip archive — extract with 7-Zip.',
+  dwg: 'AutoCAD DWG is a closed format - open it in AutoCAD, DWG TrueView (free) or LibreCAD.',
+  dxf: 'DXF drawing - open in LibreCAD, FreeCAD or AutoCAD.',
+  step: 'STEP CAD model - open in FreeCAD or any CAD tool.', stp: 'STEP CAD model - open in FreeCAD or any CAD tool.',
+  iges: 'IGES CAD model - open in FreeCAD.', igs: 'IGES CAD model - open in FreeCAD.',
+  sldprt: 'SolidWorks part - needs SolidWorks or eDrawings.', sldasm: 'SolidWorks assembly - needs SolidWorks or eDrawings.',
+  doc: 'Old Word .doc format - download and open in Word/LibreOffice.', ppt: 'Old PowerPoint .ppt - download to open.',
+  rar: 'RAR archive - extract with 7-Zip/WinRAR.', '7z': '7-Zip archive - extract with 7-Zip.',
 };
 async function renderInfo(blob, host, opts) {
   const box = el('div', 'info');

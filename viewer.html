@@ -27,18 +27,23 @@
         <select id="kindFilter" aria-label="File type"><option value="">All types</option></select>
         <i data-icon="chevron" data-size="14"></i>
       </label>
-      <label class="field select withicon" data-tip="Sort">
-        <i data-icon="sort" data-size="15"></i>
-        <select id="sortBy" aria-label="Sort cards">
-          <option value="order">Page order</option>
-          <option value="name">Student A–Z</option>
-          <option value="nameDesc">Student Z–A</option>
-          <option value="file">File name</option>
-          <option value="type">File type</option>
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-          <option value="late">Late first</option>
-          <option value="similar">Most similar first</option>
+      <label class="field select withicon" data-tip="Filter and sort">
+        <i data-icon="filter" data-size="15"></i>
+        <select id="sortBy" aria-label="Filter and sort cards">
+          <option value="order">Filter</option>
+          <optgroup label="Show">
+            <option value="selected">Selected only</option>
+          </optgroup>
+          <optgroup label="Sort">
+            <option value="name">Student A–Z</option>
+            <option value="nameDesc">Student Z–A</option>
+            <option value="file">File name</option>
+            <option value="type">File type</option>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="late">Late first</option>
+            <option value="similar">Most similar first</option>
+          </optgroup>
         </select>
         <i data-icon="chevron" data-size="14"></i>
       </label>

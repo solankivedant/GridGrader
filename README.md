@@ -23,7 +23,7 @@ A Chrome / Edge / Brave extension that finds every submitted file on a page and 
    - **Marks / note** box under each file: saved automatically. Export them with **More → Export marks/notes (CSV)**.
    - **Select several files:** click a card's number (Shift-click for a range, or Ctrl-click the name). A bar appears with **Compare** (exactly 2), **Open in tabs**, **Download ZIP** and **Remove**.
    - **Compare** shows two submissions side by side, each with its own notes box.
-   - **Sort** by page order, student name, file name, file type, newest/oldest submission, late first, or most similar.
+   - The **Filter** menu has **Selected only** (hides every card you have not ticked) and sorting by student name, file name, file type, newest/oldest submission, late first, or most similar.
    - **Late submissions** get a red LATE tag (hover it to see how late). The clock button in the toolbar shows only late ones.
    - **More → Find similar circuits** compares every Logisim file with every other one and lists suspiciously similar pairs, even if the copy was moved or relabelled. Click **Compare** on a pair to check it yourself.
    - **Keyboard:** J/K next/previous card, S or Enter side view, F full screen, N note, X select, C compare, O new tab, D download, / search, Esc close. Press **?** for the full list.
