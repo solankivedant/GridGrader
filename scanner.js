@@ -22,6 +22,14 @@ function ggScanPage(knownExts, includeAll) {
   const junkCell = /^(select|download|view|grade|edit|\d+|-)$|^(submitted|not submitted|no submission|graded|not graded|turned in|handed in|missing|late|on time|draft|assigned|done|needs grading|no attempt|comments?\b|feedback|similarity|originality)|turnitin|resubmit|plagiarism|ouriginal|urkund/i;
   const dateCell = /\b(19|20)\d\d\b.*\d{1,2}:\d{2}|\d{1,2}:\d{2}.*\b(19|20)\d\d\b/;
 
+  // Mail and drive pages (Gmail, Outlook, Drive) put button text around attachments:
+  // "Preview attachment X.pdf", "Download", "Add to Drive", "Edit with Google Docs", file sizes.
+  const buttonWords = /\b(preview|download|open|view|save)\s+attachment\b|\bdownload all( attachments)?\b|\badd (all )?to (my )?drive\b|\bsave (all )?to (drive|photos|onedrive)\b|\bedit with( google (docs|sheets|slides))?\b|\bopen with\b|\bscan(ned)? (for|by) (viruses|gmail)\b|\b(download|preview|share|print|attachments?)\b|\b\d+(\.\d+)?\s*(bytes|kb|mb|gb)\b/gi;
+  const cleanFileName = (s) => clean(clean(s)
+    .replace(/^(?:(?:preview|download|open|view|save)\s+(?:attachment|file)s?\s*[:\-]?\s*|(?:attachment|file)s?\s*:\s*)/i, '')   // "Preview attachment X.pdf"
+    .replace(/^(?:download|preview)\s+/i, '')
+    .split(/[\\/]/).pop());
+
   // Try to guess who submitted the file: table row cells, a list item, or a nearby card.
   function contextFor(a, fileName) {
     const linkText = clean(a.innerText);
@@ -47,8 +55,15 @@ function ggScanPage(knownExts, includeAll) {
       const t = clean(el.innerText);
       if (t.length > linkText.length + 2 && t.length < 400) {
         let rest = t.replace(linkText, ' ').replace(fileName, ' ').replace(/resubmit to turnitin|turnitin|similarity:?\s*\d*%?/gi, ' ');
-        rest = clean(rest).split(/ (?:Download|View|Submitted|Due|Turned in)\b/i)[0];
-        if (rest.length >= 2) return rest.slice(0, 60);
+        // other attachments in the same box (e.g. a row of Gmail chips) are not "who submitted this"
+        const others = [...el.querySelectorAll('a[href]')].filter(o => o !== a && o.href !== a.href);
+        for (const o of others) { const ot = clean(o.innerText); if (ot) rest = rest.replace(ot, ' '); }
+        rest = clean(rest.replace(buttonWords, ' ')).split(/ (?:Download|View|Submitted|Due|Turned in)\b/i)[0];
+        if (rest.length >= 2 && /[a-z]{2}/i.test(rest)) return rest.slice(0, 60);
+        // reached a container that just lists several files: going further out only finds page text
+        const looksLikeFile = (o) => [...(o.innerText || '').split('\n'), o.getAttribute('aria-label') || '', o.getAttribute('download') || '']
+          .some(s => { const e = extOf(s); return e && known.has(e); });
+        if (others.some(looksLikeFile)) break;
       }
       if (t.length >= 400) break;
     }
@@ -98,6 +113,8 @@ function ggScanPage(knownExts, includeAll) {
 
     const candidates = [
       a.getAttribute('download'),
+      // each line of the link text on its own: Gmail chips are "name.pdf\n216 KB\nDownload…"
+      ...(a.innerText || '').split('\n').map(clean),
       clean(a.innerText),
       a.getAttribute('title'),
       a.getAttribute('aria-label'),
@@ -108,7 +125,7 @@ function ggScanPage(knownExts, includeAll) {
     let name = '', ext = '';
     for (const c of candidates) {
       const e = extOf(c);
-      if (e && known.has(e)) { name = clean(c).split(/[\\/]/).pop(); ext = e; break; }
+      if (e && known.has(e)) { name = cleanFileName(c); ext = e; break; }
     }
 
     // Google Drive / Classroom attachments → direct download URL

@@ -136,6 +136,8 @@ main { padding: 16px 18px 48px; }
 .tctx { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.005em; }
 .tname { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tnames .tname:first-child { color: var(--fg); font-weight: 600; font-size: 13px; }
+/* no student name (mail, Drive, dropped files): let the file name use two lines so it stays readable */
+.tnames .tname:only-child { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; word-break: break-word; }
 
 .kind { flex: none; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
   color: var(--k); background: color-mix(in srgb, var(--k) 11%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--k) 26%, transparent); }

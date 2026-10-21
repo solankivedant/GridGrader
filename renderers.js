@@ -10,6 +10,21 @@ const el = (tag, cls, text) => {
   if (text != null) e.textContent = text;
   return e;
 };
+// Watch an element's size and run fn on the next frame (only when the size really changed).
+// Doing the work inside the observer callback itself makes Chrome log
+// "ResizeObserver loop completed with undelivered notifications".
+export function onResize(el, fn) {
+  let raf = 0, w = -1, h = -1;
+  const ro = new ResizeObserver((entries) => {
+    const r = entries[entries.length - 1].contentRect;
+    if (r.width === w && r.height === h) return;
+    w = r.width; h = r.height;
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => fn(r));
+  });
+  ro.observe(el);
+  return { disconnect: () => { cancelAnimationFrame(raf); ro.disconnect(); } };
+}
 export const fmtSize = (n) => n == null ? '' : n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -138,8 +153,7 @@ async function renderPdf(blob, host, opts) {
     }
   }, { root: host, rootMargin: '600px 0px' });
   pages.forEach(p => io.observe(p.div));
-  const ro = new ResizeObserver(() => visible.forEach(i => draw(i)));
-  ro.observe(host);
+  const ro = onResize(host, () => visible.forEach(i => draw(i)));
   return {
     cleanup: () => { dead = true; io.disconnect(); ro.disconnect(); pdf.destroy(); },
     meta: `${pdf.numPages} page${pdf.numPages === 1 ? '' : 's'}`,
@@ -236,8 +250,7 @@ async function renderDocx(blob, host, opts) {
     inner.style.width = opts.large ? `${pw}px` : '';
   };
   fit();
-  const ro = new ResizeObserver(fit);
-  ro.observe(host);
+  const ro = onResize(host, fit);
   const pagesN = inner.querySelectorAll('section.docx').length;
   const words = (inner.innerText.match(/\S+/g) || []).length;
   return { cleanup: () => ro.disconnect(), meta: `${pagesN} page${pagesN === 1 ? '' : 's'} · ${words.toLocaleString()} words` };
@@ -459,8 +472,7 @@ async function renderModel(blob, host, opts) {
   let raf;
   const loop = () => { controls.update(); renderer.render(scene, camera); raf = requestAnimationFrame(loop); };
   loop();
-  const ro = new ResizeObserver(() => { camera.aspect = W() / H(); camera.updateProjectionMatrix(); renderer.setSize(W(), H()); });
-  ro.observe(host);
+  const ro = onResize(host, () => { camera.aspect = W() / H(); camera.updateProjectionMatrix(); renderer.setSize(W(), H()); });
   return { cleanup: () => { cancelAnimationFrame(raf); ro.disconnect(); controls.dispose(); renderer.dispose(); renderer.forceContextLoss(); }, meta };
 }
 

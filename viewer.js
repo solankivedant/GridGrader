@@ -1,4 +1,4 @@
-import { renderInto, sniffKind, looksLikeHtmlPage, fmtSize } from './renderers.js';
+import { renderInto, sniffKind, looksLikeHtmlPage, fmtSize, onResize } from './renderers.js';
 import { circuitFeatures, circuitSimilarity } from './circsim.js';
 
 const $ = (s) => document.querySelector(s);
@@ -60,7 +60,7 @@ const safe = (s) => (s || '').replace(/[\\/:*?"<>|\n\r\t]+/g, ' ').replace(/\s+/
   $('#title').textContent = t || 'New grid';
   if (job.page && job.page.url) { $('#source').href = job.page.url; $('#source').innerHTML = ggIcon('link', 12); $('#source').append(job.page.url.replace(/^https?:\/\//, '')); $('#source').dataset.tip = 'Source page'; }
   else $('#source').textContent = 'Drop files anywhere to add them';
-  for (const f of job.files || []) addItem({ url: f.url, name: f.name, ext: f.ext, kind: f.kind || ggKindOf(f.ext), context: f.context, noteKey: f.noteKey,
+  for (const f of job.files || []) addItem({ url: f.url, name: ggCleanFileName(f.name) || f.name, ext: f.ext, kind: f.kind || ggKindOf(f.ext), context: ggCleanContext(f.context), noteKey: f.noteKey,
     late: !!f.late, lateText: f.lateText, modified: f.modified, modifiedText: f.modifiedText });
   $('#sortBy').value = prefs.sort;
   applySort();
@@ -562,14 +562,14 @@ function updateKindFilter() {
 }
 // ---------- collapsible filters (narrow grid, e.g. next to the side view) ----------
 const bar = document.querySelector('.bar');
-new ResizeObserver(() => {
+onResize(bar, () => {
   bar.classList.toggle('narrow', bar.clientWidth < 620);
   const compact = bar.clientWidth < 1180;
   if (compact !== bar.classList.contains('compact')) {
     bar.classList.toggle('compact', compact);
     if (!compact) setFiltersOpen(false);
   }
-}).observe(bar);
+});
 function setFiltersOpen(open) {
   bar.classList.toggle('open', open);
   $('#filterToggle').setAttribute('aria-expanded', open);

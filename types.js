@@ -34,3 +34,16 @@ function ggIsKnownFileExt(ext) {
   ext = (ext || '').toLowerCase();
   return !!GG_EXT_TO_KIND[ext] || GG_EXTRA_FILE_EXTS.includes(ext);
 }
+
+// Clean names that came from mail/drive pages: "Preview attachment X.pdf" → "X.pdf";
+// a "context" made only of button text ("Download Add to Drive Edit with") → "".
+const GG_BUTTON_WORDS = /\b(preview|download|open|view|save)\s+attachment\b|\bdownload all( attachments)?\b|\badd (all )?to (my )?drive\b|\bsave (all )?to (drive|photos|onedrive)\b|\bedit with( google (docs|sheets|slides))?\b|\bopen with\b|\bscan(ned)? (for|by) (viruses|gmail)\b|\b(download|preview|share|print|attachments?)\b|\b\d+(\.\d+)?\s*(bytes|kb|mb|gb)\b/gi;
+function ggCleanFileName(s) {
+  return (s || '').replace(/\s+/g, ' ').trim()
+    .replace(/^(?:(?:preview|download|open|view|save)\s+(?:attachment|file)s?\s*[:\-]?\s*|(?:attachment|file)s?\s*:\s*)/i, '')
+    .replace(/^(?:download|preview)\s+/i, '').trim();
+}
+function ggCleanContext(s) {
+  const t = (s || '').replace(GG_BUTTON_WORDS, ' ').replace(/\s+/g, ' ').replace(/^[\s·,-]+|[\s·,-]+$/g, '').trim();
+  return /[a-z]{2}/i.test(t) ? t : '';
+}
