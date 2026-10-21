@@ -46,7 +46,7 @@ function applyPrefs() {
   localStorage.setItem('gg_prefs', JSON.stringify(prefs));
 }
 
-const noteKey = (it) => it.url ? it.url : `local:${it.name}:${it.size || ''}`;
+const noteKey = (it) => it.noteKey || (it.url ? it.url : `local:${it.name}:${it.size || ''}`);
 const safe = (s) => (s || '').replace(/[\\/:*?"<>|\n\r\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
 
 // ---------- boot ----------
@@ -59,10 +59,46 @@ const safe = (s) => (s || '').replace(/[\\/:*?"<>|\n\r\t]+/g, ' ').replace(/\s+/
   $('#title').textContent = t || 'New grid';
   if (job.page && job.page.url) { $('#source').href = job.page.url; $('#source').innerHTML = ggIcon('link', 12); $('#source').append(job.page.url.replace(/^https?:\/\//, '')); $('#source').dataset.tip = 'Source page'; }
   else $('#source').textContent = 'Drop files anywhere to add them';
-  for (const f of job.files || []) addItem({ url: f.url, name: f.name, ext: f.ext, kind: f.kind || ggKindOf(f.ext), context: f.context });
+  for (const f of job.files || []) addItem({ url: f.url, name: f.name, ext: f.ext, kind: f.kind || ggKindOf(f.ext), context: f.context, noteKey: f.noteKey });
   refreshEmpty();
   updateStatus();
+  // A tab opened with "New tab" shows its one file straight away, full screen.
+  if (job.single && items.length) { document.title = items[0].context || items[0].name; openModal(items[0], 'full', false); }
 })();
+
+// Keep marks/notes in sync when another GridGrader tab edits them.
+if (hasChrome && chrome.storage.onChanged) chrome.storage.onChanged.addListener((ch, area) => {
+  if (area !== 'local' || !ch.gg_notes) return;
+  notes = ch.gg_notes.newValue || {};
+  for (const it of items) {
+    const v = notes[noteKey(it)] || '', n = it.tile.querySelector('.note');
+    if (n !== document.activeElement && n.value !== v) { n.value = v; n.classList.toggle('has', !!v); }
+  }
+  if (modalItem && $('#mNote') !== document.activeElement) $('#mNote').value = notes[noteKey(modalItem)] || '';
+});
+
+// ---------- open one file in its own GridGrader tab ----------
+// The original link often forces a download (Moodle pluginfile, forcedownload=1), so instead we
+// hand the file to a new viewer tab. If it is already loaded here we pass a blob: URL, which the new
+// tab (same extension origin) can read instantly without downloading it again.
+async function openInNewTab(it) {
+  let url = it.url;
+  try {
+    if (it.blob || !url) { await getBlob(it); url = URL.createObjectURL(it.blob); }
+  } catch { /* fall back to the network URL */ }
+  if (!url) return;
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  await store.set('job_' + id, {
+    created: Date.now(), tabId: job.tabId, page: job.page, single: true,
+    files: [{ url, name: it.name, ext: it.ext, kind: it.kind, context: it.context, noteKey: noteKey(it) }],
+  });
+  const page = 'viewer.html?job=' + id;
+  if (hasChrome && chrome.tabs && chrome.tabs.create) {
+    // chrome.tabs is not subject to popup blocking, and lets us place the tab next to this one
+    const cur = chrome.tabs.getCurrent ? await chrome.tabs.getCurrent() : null;
+    chrome.tabs.create({ url: chrome.runtime.getURL(page), index: cur ? cur.index + 1 : undefined, openerTabId: cur ? cur.id : undefined });
+  } else window.open(page, '_blank');
+}
 
 // ---------- items & tiles ----------
 function addItem(data, afterItem) {
@@ -96,7 +132,7 @@ function buildTile(it) {
       <div class="tact">
         <button data-a="side" data-tip="Side view" aria-label="Open in side view">${ggIcon('side', 16)}</button>
         <button data-a="full" data-tip="Full screen" aria-label="Open full screen">${ggIcon('full', 16)}</button>
-        <a data-a="orig" data-tip="New tab" aria-label="Open in new tab" target="_blank" rel="noopener">${ggIcon('external', 16)}</a>
+        <button data-a="orig" data-tip="New tab" aria-label="Open in a new tab">${ggIcon('external', 16)}</button>
         <button data-a="dl" data-tip="Download" aria-label="Download">${ggIcon('download', 16)}</button>
         <button data-a="rm" class="danger" data-tip="Remove" aria-label="Remove from grid">${ggIcon('trash', 16)}</button>
       </div>
@@ -111,8 +147,7 @@ function buildTile(it) {
   t.querySelector('.kind').dataset.kind = it.kind;
   t.querySelector('.ficon').dataset.kind = it.kind;
   t.querySelector('.ficon').innerHTML = ggKindIcon(it.kind, 16);
-  const orig = t.querySelector('[data-a=orig]');
-  if (it.url) orig.href = it.url; else orig.style.display = 'none';
+  t.querySelector('[data-a=orig]').onclick = () => openInNewTab(it);
   names.onclick = () => openModal(it);
   t.querySelector('[data-a=side]').onclick = () => openModal(it, 'side');
   t.querySelector('[data-a=full]').onclick = () => openModal(it, 'full');
@@ -397,8 +432,8 @@ addEventListener('drop', (e) => {
 let modalItem = null, modalCleanup = null;
 function visibleItems() { return items.filter(i => i.tile.style.display !== 'none'); }
 
-async function openModal(it, mode) {
-  if (mode && mode !== prefs.view) { prefs.view = mode; applyPrefs(); }
+async function openModal(it, mode, remember = true) {
+  if (mode && mode !== prefs.view) { prefs.view = mode; if (remember) applyPrefs(); }
   modalCleanup && modalCleanup(); modalCleanup = null;
   modalItem = it;
   $('#modal').hidden = false;
@@ -409,8 +444,6 @@ async function openModal(it, mode) {
   $('#mNote').value = notes[noteKey(it)] || '';
   const vis = visibleItems();
   $('#mPos').textContent = vis.includes(it) ? `${vis.indexOf(it) + 1} / ${vis.length}` : '';
-  const o = $('#mOpen');
-  if (it.url) { o.href = it.url; o.style.display = ''; } else o.style.display = 'none';
   const body = $('#mBody');
   body.innerHTML = '<div class="center"><div class="spinner"></div></div>';
   body.scrollTop = 0;
@@ -485,6 +518,7 @@ applyView();
 $('#prev').onclick = () => step(-1);
 $('#next').onclick = () => step(1);
 $('#mDl').onclick = () => modalItem && downloadItem(modalItem);
+$('#mOpen').onclick = () => modalItem && openInNewTab(modalItem);
 $('#mNote').oninput = (e) => modalItem && saveNote(modalItem, e.target.value);
 addEventListener('keydown', (e) => {
   if ($('#modal').hidden) return;
